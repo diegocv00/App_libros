@@ -31,3 +31,34 @@ export type Community = {
 
 export type CommunityInput = Omit<Community, 'id' | 'created_at' | 'member_count'>;
 
+export type Draft = {
+  id: string;
+  user_id: string;
+  draft_name: string;
+  title: string;
+  author: string;
+  description: string;
+  condition: string;
+  price: string;
+  photos: string[];
+  cover_index: number;
+  updated_at: string;
+};
+
+export type Favorite = {
+  id: string;
+  user_id: string;
+  listing_id: string;
+  created_at: string;
+  listing?: Listing;
+};
+
+export type Rating = {
+  id: string;
+  reviewer_id: string;
+  seller_id: string;
+  listing_id: string;
+  stars: number;
+  comment: string | null;
+  created_at: string;
+};
