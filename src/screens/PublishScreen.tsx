@@ -43,7 +43,6 @@ export function PublishScreen() {
   const [draftName, setDraftName] = useState('');
   const [draftId, setDraftId] = useState<string | null>(null);
 
-  // Cargar datos si venimos de la pantalla de perfil tocando un borrador
   useEffect(() => {
     if (route.params?.draft) {
       const { draft } = route.params;
@@ -58,8 +57,6 @@ export function PublishScreen() {
         coverIndex: draft.cover_index || 0,
       });
       setDraftName(draft.draft_name || '');
-
-      // Limpiamos el parámetro para evitar recargas infinitas
       navigation.setParams({ draft: undefined });
     }
   }, [route.params?.draft]);
@@ -126,14 +123,15 @@ export function PublishScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuario no autenticado');
 
-      await createListing({
+      // 1. Capturamos el nuevo libro creado (la función ya devuelve el objeto)
+      const newListing = await createListing({
         title: form.title.trim(),
         author: form.author.trim() || 'Autor no especificado',
         description: form.description.trim() || 'Sin descripción',
         condition: form.condition,
         price: priceValue,
         photo_url: form.photos.length > 0 ? form.photos[form.coverIndex] : null,
-        photos: form.photos, // Enviamos el arreglo de hasta 5 fotos a la BD
+        photos: form.photos,
         seller_id: user.id,
         category: null, review: null, publisher: null, edition: null, year: null, location: null,
       });
@@ -142,8 +140,16 @@ export function PublishScreen() {
         await supabase.from('drafts').delete().eq('id', draftId);
       }
 
+      // 2. Limpiamos el formulario
       setForm(initialForm);
-      navigation.goBack();
+
+      // 3. NAVEGACIÓN CORRECTA:
+      // Primero saltamos a la pestaña de Mercado para que sea el "fondo" al volver
+      navigation.navigate('Main', { screen: 'Mercado' });
+
+      // Luego navegamos a la pantalla de detalle con el nuevo libro
+      navigation.navigate('ListingDetail', { listing: newListing });
+
     } catch (error: any) {
       setStatus(error?.message ?? 'No se pudo publicar.');
     } finally {
@@ -178,7 +184,6 @@ export function PublishScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
       <View style={styles.header}>
         <Pressable style={styles.headerIcon} onPress={() => navigation.goBack()}>
           <MaterialIcons name="close" size={24} color={colors.muted} />
@@ -193,7 +198,6 @@ export function PublishScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        {/* Photo Upload */}
         <View style={styles.photoContainer}>
           <Text style={styles.label}>Fotos del libro ({form.photos.length}/5)</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
@@ -234,7 +238,6 @@ export function PublishScreen() {
           <Text style={styles.hint}>Toca una foto para seleccionarla como portada.</Text>
         </View>
 
-        {/* Form */}
         <View style={styles.form}>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Título del libro</Text>
@@ -283,7 +286,6 @@ export function PublishScreen() {
         {status ? <Text style={styles.statusText}>{status}</Text> : null}
       </ScrollView>
 
-      {/* Footer */}
       <View style={styles.footer}>
         <Pressable
           style={[styles.publishBtn, (!canSubmit || loading) ? styles.btnDisabled : null]}
@@ -299,7 +301,6 @@ export function PublishScreen() {
         </Pressable>
       </View>
 
-      {/* Draft Name Modal */}
       <Modal visible={showDraftModal} transparent animationType="fade" onRequestClose={() => setShowDraftModal(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowDraftModal(false)}>
           <Pressable style={styles.modalCard} onPress={e => e.stopPropagation()}>

@@ -144,7 +144,6 @@ export function ProfileScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Mi perfil literario</Text>
           <Pressable style={styles.logoutBtn} onPress={() => setShowLogoutModal(true)}>
@@ -152,7 +151,6 @@ export function ProfileScreen() {
           </Pressable>
         </View>
 
-        {/* Profile Hero */}
         <View style={styles.hero}>
           <View style={styles.avatarContainer}>
             <View style={styles.avatarBlur} />
@@ -194,24 +192,23 @@ export function ProfileScreen() {
           )}
         </View>
 
-        {/* Stats */}
+        {/* Stats - Con navegación interna */}
         <View style={styles.statsRow}>
-          <View style={styles.statCard}>
+          <Pressable style={styles.statCard} onPress={() => setActiveTab('Publicados')}>
             <Text style={styles.statValue}>{myListings.length}</Text>
             <Text style={styles.statLabel}>Libros publicados</Text>
-          </View>
+          </Pressable>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{rating.avg > 0 ? rating.avg.toFixed(1) : '—'}</Text>
             <StarRow rating={rating.avg} count={rating.count} />
             <Text style={styles.statLabel}>Valoración</Text>
           </View>
-          <View style={styles.statCard}>
+          <Pressable style={styles.statCard} onPress={() => setActiveTab('Borradores')}>
             <Text style={styles.statValue}>{drafts.length}</Text>
             <Text style={styles.statLabel}>Borradores</Text>
-          </View>
+          </Pressable>
         </View>
 
-        {/* Tabs */}
         <View style={styles.tabContainer}>
           {TABS.map((tab) => (
             <Pressable key={tab} style={[styles.tab, activeTab === tab ? styles.tabActive : null]}
@@ -221,7 +218,6 @@ export function ProfileScreen() {
           ))}
         </View>
 
-        {/* Content */}
         <View style={styles.grid}>
           {loading ? (
             <ActivityIndicator style={{ marginTop: 20, width: '100%' }} color={colors.primary} />
@@ -236,7 +232,7 @@ export function ProfileScreen() {
                 <Pressable
                   key={draft.id}
                   style={styles.draftCard}
-                  onPress={() => (navigation as any).navigate('Publicar', { draft })} // Tarea 1: Redirigir a Publicar
+                  onPress={() => (navigation as any).navigate('Publicar', { draft })}
                 >
                   <View style={styles.draftIconBg}>
                     <MaterialIcons name="bookmark" size={24} color={colors.primary} />
@@ -270,23 +266,19 @@ export function ProfileScreen() {
                 <Pressable
                   key={item.id}
                   style={styles.gridItem}
-                  onPress={() => (navigation as any).navigate('ListingDetail', { listing: item })} // Tarea 1: Redirigir a Detalle
+                  onPress={() => (navigation as any).navigate('ListingDetail', { listing: item })}
                 >
                   <View style={styles.bookThumbContainer}>
                     <Image
                       source={{ uri: item.photo_url || 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=200&auto=format&fit=crop' }}
                       style={styles.bookThumb}
                     />
-
-                    {/* Botón de Editar a la derecha */}
                     <Pressable
                       style={[styles.actionIconBtn, { right: 8, backgroundColor: 'rgba(0,0,0,0.5)' }]}
                       onPress={() => (navigation as any).navigate('EditListing', { listing: item })}
                     >
                       <MaterialIcons name="edit" size={14} color="#FFF" />
                     </Pressable>
-
-                    {/* Botón de Eliminar a la izquierda */}
                     <Pressable
                       style={[styles.actionIconBtn, { left: 8, backgroundColor: 'rgba(239, 68, 68, 0.8)' }]}
                       onPress={() => handleDeleteListing(item.id)}
@@ -303,7 +295,6 @@ export function ProfileScreen() {
         </View>
       </ScrollView>
 
-      {/* Logout Confirmation Modal */}
       <Modal visible={showLogoutModal} transparent animationType="fade" onRequestClose={() => setShowLogoutModal(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowLogoutModal(false)}>
           <Pressable style={styles.modalCard} onPress={e => e.stopPropagation()}>
