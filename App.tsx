@@ -5,12 +5,17 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from './src/lib/supabase';
+
+// Pantallas
 import { PublishScreen } from './src/screens/PublishScreen';
 import { ResaleScreen } from './src/screens/ResaleScreen';
 import { CommunitiesScreen } from './src/screens/CommunitiesScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { EditScreen } from './src/screens/EditScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
+import { ListingDetailScreen } from './src/screens/ListingDetailScreen'; // <-- 1. NUEVA IMPORTACIÓN
+
+// Iconos y tema
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from './src/theme';
 
@@ -120,6 +125,8 @@ export default function App() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Main" component={MainTabs} />
         <Stack.Screen name="EditListing" component={EditScreen} />
+        {/* 2. NUEVA RUTA REGISTRADA AQUÍ ABAJO 👇 */}
+        <Stack.Screen name="ListingDetail" component={ListingDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

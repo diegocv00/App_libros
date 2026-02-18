@@ -1,6 +1,9 @@
 ﻿import { supabase } from '../lib/supabase';
 import { Draft, Favorite, Listing, ListingInput, Rating } from '../types';
 
+/** * Tarea: Mostrar la publicación al terminar.
+ * Esta función devuelve el objeto 'Listing' recién creado incluyendo su ID.
+ */
 export async function createListing(input: ListingInput): Promise<Listing> {
   const { data, error } = await supabase
     .from('listings')
@@ -51,6 +54,22 @@ export async function updateListing(id: string, input: Partial<ListingInput>): P
   const { error } = await supabase
     .from('listings')
     .update(input)
+    .eq('id', id)
+    .eq('seller_id', user.id);
+
+  if (error) throw error;
+}
+
+/** * Tarea 1: Eliminar una publicación.
+ * Solo permite borrar si el seller_id coincide con el usuario actual.
+ */
+export async function deleteListing(id: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('No autenticado');
+
+  const { error } = await supabase
+    .from('listings')
+    .delete()
     .eq('id', id)
     .eq('seller_id', user.id);
 

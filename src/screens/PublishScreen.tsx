@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from 'react';
+﻿import React, { useMemo, useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import {
   ActivityIndicator,
@@ -14,11 +14,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { createListing } from '../services/listings';
-import { saveDraft } from '../services/listings';
+import { createListing, saveDraft } from '../services/listings';
 import { supabase } from '../lib/supabase';
 import { colors, radius, spacing } from '../theme';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { formatInputPrice, cleanPrice } from '../utils/formatters';
 
 const CONDITIONS = ['Nuevo', 'Como nuevo', 'Buen estado', 'Aceptable'];
@@ -35,12 +34,35 @@ const initialForm = {
 
 export function PublishScreen() {
   const navigation = useNavigation();
+  const route = useRoute<any>();
 
   const [form, setForm] = useState(initialForm);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [draftName, setDraftName] = useState('');
+  const [draftId, setDraftId] = useState<string | null>(null);
+
+  // Cargar datos si venimos de la pantalla de perfil tocando un borrador
+  useEffect(() => {
+    if (route.params?.draft) {
+      const { draft } = route.params;
+      setDraftId(draft.id);
+      setForm({
+        title: draft.title || '',
+        author: draft.author || '',
+        description: draft.description || '',
+        condition: draft.condition || 'Nuevo',
+        price: draft.price ? String(draft.price) : '',
+        photos: Array.isArray(draft.photos) ? draft.photos : [],
+        coverIndex: draft.cover_index || 0,
+      });
+      setDraftName(draft.draft_name || '');
+
+      // Limpiamos el parámetro para evitar recargas infinitas
+      navigation.setParams({ draft: undefined });
+    }
+  }, [route.params?.draft]);
 
   const canSubmit = useMemo(() => {
     return form.title.trim().length > 0 && form.price.trim().length > 0;
@@ -53,6 +75,12 @@ export function PublishScreen() {
   };
 
   const pickImage = async () => {
+    const limit = 5 - form.photos.length;
+    if (limit <= 0) {
+      Alert.alert('Límite alcanzado', 'Solo puedes añadir un máximo de 5 fotos.');
+      return;
+    }
+
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permiso denegado', 'Necesitamos acceso a tu galería para subir fotos.');
@@ -60,15 +88,18 @@ export function PublishScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: true,
+      selectionLimit: limit,
       quality: 0.8,
     });
 
     if (!result.canceled) {
       const selectedUris = result.assets.map(asset => asset.uri);
-      setForm(prev => ({ ...prev, photos: [...prev.photos, ...selectedUris] }));
-      // ✅ Punto 8: sin Alert al añadir imágenes
+      setForm(prev => {
+        const combined = [...prev.photos, ...selectedUris];
+        return { ...prev, photos: combined.slice(0, 5) };
+      });
     }
   };
 
@@ -102,9 +133,15 @@ export function PublishScreen() {
         condition: form.condition,
         price: priceValue,
         photo_url: form.photos.length > 0 ? form.photos[form.coverIndex] : null,
+        photos: form.photos, // Enviamos el arreglo de hasta 5 fotos a la BD
         seller_id: user.id,
         category: null, review: null, publisher: null, edition: null, year: null, location: null,
       });
+
+      if (draftId) {
+        await supabase.from('drafts').delete().eq('id', draftId);
+      }
+
       setForm(initialForm);
       navigation.goBack();
     } catch (error: any) {
@@ -119,6 +156,7 @@ export function PublishScreen() {
     setLoading(true);
     try {
       await saveDraft({
+        id: draftId || undefined,
         draft_name: draftName.trim(),
         title: form.title,
         author: form.author,
@@ -127,7 +165,7 @@ export function PublishScreen() {
         price: form.price,
         photos: form.photos,
         cover_index: form.coverIndex,
-      });
+      } as any);
       setShowDraftModal(false);
       setDraftName('');
       setStatus('Borrador guardado.');
@@ -150,22 +188,24 @@ export function PublishScreen() {
           onPress={() => { setDraftName(form.title || ''); setShowDraftModal(true); }}
           disabled={loading || !form.title}
         >
-          <Text style={[styles.draftText, (!form.title || loading) && { opacity: 0.4 }]}>Borrador</Text>
+          <Text style={[styles.draftText, (!form.title || loading) ? { opacity: 0.4 } : null]}>Borrador</Text>
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         {/* Photo Upload */}
         <View style={styles.photoContainer}>
-          <Text style={styles.label}>Fotos del libro</Text>
+          <Text style={styles.label}>Fotos del libro ({form.photos.length}/5)</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
-            <Pressable
-              style={({ pressed }) => [styles.addPhotoBtn, pressed && { opacity: 0.7 }]}
-              onPress={pickImage}
-            >
-              <MaterialIcons name="add-a-photo" size={32} color={colors.primary} />
-              <Text style={styles.addPhotoText}>Añadir fotos</Text>
-            </Pressable>
+            {form.photos.length < 5 ? (
+              <Pressable
+                style={({ pressed }) => [styles.addPhotoBtn, pressed && { opacity: 0.7 }]}
+                onPress={pickImage}
+              >
+                <MaterialIcons name="add-a-photo" size={32} color={colors.primary} />
+                <Text style={styles.addPhotoText}>Añadir fotos</Text>
+              </Pressable>
+            ) : null}
 
             {form.photos.map((uri, idx) => (
               <View key={idx} style={styles.photoThumb}>
@@ -184,12 +224,12 @@ export function PublishScreen() {
               </View>
             ))}
 
-            {form.photos.length === 0 && (
+            {form.photos.length === 0 ? (
               <View style={styles.photoPlaceholder}>
                 <MaterialIcons name="image" size={24} color={colors.muted} />
                 <Text style={styles.photoPlaceholderText}>Sin fotos</Text>
               </View>
-            )}
+            ) : null}
           </ScrollView>
           <Text style={styles.hint}>Toca una foto para seleccionarla como portada.</Text>
         </View>
@@ -240,7 +280,7 @@ export function PublishScreen() {
           </View>
         </View>
 
-        {status.length > 0 && <Text style={styles.statusText}>{status}</Text>}
+        {status ? <Text style={styles.statusText}>{status}</Text> : null}
       </ScrollView>
 
       {/* Footer */}
@@ -283,7 +323,7 @@ export function PublishScreen() {
                 <Text style={styles.modalCancelText}>Cancelar</Text>
               </Pressable>
               <Pressable
-                style={[styles.modalConfirmBtn, !draftName.trim() && { opacity: 0.5 }]}
+                style={[styles.modalConfirmBtn, !draftName.trim() ? { opacity: 0.5 } : null]}
                 onPress={handleSaveDraft}
                 disabled={!draftName.trim() || loading}
               >
@@ -370,7 +410,6 @@ const styles = StyleSheet.create({
   },
   publishBtnText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
   btnDisabled: { backgroundColor: '#cbd5e1', shadowOpacity: 0, elevation: 0 },
-  // Draft Modal
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center', justifyContent: 'center', padding: spacing.xl,

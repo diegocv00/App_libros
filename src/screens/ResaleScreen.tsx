@@ -198,11 +198,11 @@ export function ResaleScreen() {
                     color={isFav ? '#ef4444' : '#fff'}
                   />
                 </Pressable>
-                {item.condition && (
+                {item.condition ? (
                   <View style={styles.conditionBadge}>
                     <Text style={styles.conditionText}>{item.condition}</Text>
                   </View>
-                )}
+                ) : null}
               </View>
               <View style={styles.bookInfo}>
                 <Text style={styles.bookTitle} numberOfLines={1}>{item.title}</Text>

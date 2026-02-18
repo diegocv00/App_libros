@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState, useCallback } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import {
   Alert,
@@ -14,12 +14,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '../theme';
 import { formatCurrency } from '../utils/formatters';
 import { supabase } from '../lib/supabase';
-import { fetchMyListings, fetchDrafts, fetchSellerRating } from '../services/listings';
+import { fetchMyListings, fetchDrafts, fetchSellerRating, deleteListing } from '../services/listings';
 import { Listing, Draft } from '../types';
 
 const TABS = ['Publicados', 'Vendidos', 'Borradores'];
@@ -35,7 +35,9 @@ function StarRow({ rating, count }: { rating: number; count: number }) {
           color="#f59e0b"
         />
       ))}
-      {count > 0 && <Text style={{ fontSize: 10, color: colors.muted, marginLeft: 2 }}>({count})</Text>}
+      {count > 0 ? (
+        <Text style={{ fontSize: 10, color: colors.muted, marginLeft: 2 }}>({count})</Text>
+      ) : null}
     </View>
   );
 }
@@ -84,7 +86,33 @@ export function ProfileScreen() {
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
+
+  const handleDeleteListing = (id: string) => {
+    Alert.alert(
+      'Eliminar publicación',
+      '¿Estás seguro de que quieres borrar este libro? Esta acción no se puede deshacer.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteListing(id);
+              loadData();
+            } catch (err) {
+              Alert.alert('Error', 'No se pudo eliminar la publicación.');
+            }
+          }
+        }
+      ]
+    );
+  };
 
   const handleSave = async () => {
     setIsEditing(false);
@@ -103,7 +131,7 @@ export function ProfileScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') return;
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.8,
     });
     if (!result.canceled) setProfile(p => ({ ...p, avatar: result.assets[0].uri }));
   };
@@ -112,8 +140,6 @@ export function ProfileScreen() {
     setShowLogoutModal(false);
     await supabase.auth.signOut();
   };
-
-  const currentItems = activeTab === 'Publicados' ? myListings : activeTab === 'Borradores' ? drafts : [];
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -138,11 +164,11 @@ export function ProfileScreen() {
                   <MaterialIcons name="person" size={50} color={colors.muted} />
                 </View>
               )}
-              {profile.avatar && isEditing && (
+              {(profile.avatar && isEditing) ? (
                 <Pressable style={styles.deleteAvatarBtn} onPress={() => setProfile(p => ({ ...p, avatar: '' }))}>
                   <MaterialIcons name="delete" size={16} color="#FFF" />
                 </Pressable>
-              )}
+              ) : null}
             </Pressable>
           </View>
 
@@ -207,7 +233,11 @@ export function ProfileScreen() {
               </View>
             ) : (
               drafts.map((draft) => (
-                <View key={draft.id} style={styles.draftCard}>
+                <Pressable
+                  key={draft.id}
+                  style={styles.draftCard}
+                  onPress={() => (navigation as any).navigate('Publicar', { draft })} // Tarea 1: Redirigir a Publicar
+                >
                   <View style={styles.draftIconBg}>
                     <MaterialIcons name="bookmark" size={24} color={colors.primary} />
                   </View>
@@ -218,11 +248,10 @@ export function ProfileScreen() {
                       {new Date(draft.updated_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
                     </Text>
                   </View>
-                  <Pressable style={styles.draftEditBtn}
-                    onPress={() => (navigation as any).navigate('Publicar', { draft })}>
+                  <View style={styles.draftEditBtn}>
                     <MaterialIcons name="edit" size={16} color={colors.primary} />
-                  </Pressable>
-                </View>
+                  </View>
+                </Pressable>
               ))
             )
           ) : activeTab === 'Vendidos' ? (
@@ -238,20 +267,36 @@ export function ProfileScreen() {
               </View>
             ) : (
               myListings.map((item) => (
-                <View key={item.id} style={styles.gridItem}>
+                <Pressable
+                  key={item.id}
+                  style={styles.gridItem}
+                  onPress={() => (navigation as any).navigate('ListingDetail', { listing: item })} // Tarea 1: Redirigir a Detalle
+                >
                   <View style={styles.bookThumbContainer}>
                     <Image
                       source={{ uri: item.photo_url || 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=200&auto=format&fit=crop' }}
                       style={styles.bookThumb}
                     />
-                    <Pressable style={styles.itemEditBtn}
-                      onPress={() => (navigation as any).navigate('EditListing', { listing: item })}>
+
+                    {/* Botón de Editar a la derecha */}
+                    <Pressable
+                      style={[styles.actionIconBtn, { right: 8, backgroundColor: 'rgba(0,0,0,0.5)' }]}
+                      onPress={() => (navigation as any).navigate('EditListing', { listing: item })}
+                    >
                       <MaterialIcons name="edit" size={14} color="#FFF" />
+                    </Pressable>
+
+                    {/* Botón de Eliminar a la izquierda */}
+                    <Pressable
+                      style={[styles.actionIconBtn, { left: 8, backgroundColor: 'rgba(239, 68, 68, 0.8)' }]}
+                      onPress={() => handleDeleteListing(item.id)}
+                    >
+                      <MaterialIcons name="delete" size={14} color="#FFF" />
                     </Pressable>
                   </View>
                   <Text style={styles.bookTitle} numberOfLines={1}>{item.title}</Text>
                   <Text style={styles.bookPrice}>{formatCurrency(item.price)}</Text>
-                </View>
+                </Pressable>
               ))
             )
           )}
@@ -334,21 +379,22 @@ const styles = StyleSheet.create({
   tabTextActive: { color: colors.primary },
   grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: spacing.lg, gap: spacing.md, paddingBottom: 40 },
   gridItem: { width: (width - spacing.lg * 2 - spacing.md) / 2, gap: 8 },
-  bookThumbContainer: { aspectRatio: 3 / 4, borderRadius: radius.md, overflow: 'hidden', backgroundColor: '#e2e8f0' },
+  bookThumbContainer: { aspectRatio: 3 / 4, borderRadius: radius.md, overflow: 'hidden', backgroundColor: '#e2e8f0', position: 'relative' },
   bookThumb: { width: '100%', height: '100%' },
-  itemEditBtn: {
-    position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center',
+  actionIconBtn: {
+    position: 'absolute', top: 8,
+    width: 28, height: 28, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
+    zIndex: 10,
   },
   bookTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
   bookPrice: { fontSize: 16, fontWeight: '800', color: colors.primary },
   emptyContainer: { alignItems: 'center', paddingVertical: 40, width: '100%' },
   emptyText: { textAlign: 'center', color: colors.muted, marginTop: 12, fontSize: 14 },
-  // Draft card
   draftCard: {
     flexDirection: 'row', alignItems: 'center', width: '100%',
     backgroundColor: '#fff', borderRadius: radius.lg, padding: spacing.md,
-    borderWidth: 1, borderColor: colors.border, gap: spacing.md,
+    borderWidth: 1, borderColor: colors.border, gap: spacing.md, marginBottom: 12,
   },
   draftIconBg: {
     width: 48, height: 48, borderRadius: 12,
@@ -373,7 +419,6 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginTop: 8,
   },
   saveBtnText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
-  // Logout Modal
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center', justifyContent: 'center', padding: spacing.xl,
