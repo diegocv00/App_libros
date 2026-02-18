@@ -1,56 +1,43 @@
 ﻿import React, { useEffect, useState } from 'react';
-import { StatusBar } from 'expo-status-bar';
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Session } from '@supabase/supabase-js';
-import { supabase } from './src/lib/supabase';
-
-// Pantallas
-import { PublishScreen } from './src/screens/PublishScreen';
-import { ResaleScreen } from './src/screens/ResaleScreen';
-import { CommunitiesScreen } from './src/screens/CommunitiesScreen';
-import { ProfileScreen } from './src/screens/ProfileScreen';
-import { EditScreen } from './src/screens/EditScreen';
-import { AuthScreen } from './src/screens/AuthScreen';
-import { ListingDetailScreen } from './src/screens/ListingDetailScreen'; // <-- 1. NUEVA IMPORTACIÓN
-
-// Iconos y tema
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
+import { Session } from '@supabase/supabase-js';
+
+// Importa Supabase y tu tema
+import { supabase } from './src/lib/supabase';
 import { colors } from './src/theme';
 
-const Tab = createBottomTabNavigator();
+// Importa todas tus pantallas
+import { AuthScreen } from './src/screens/AuthScreen';
+import { ResaleScreen } from './src/screens/ResaleScreen';
+import { PublishScreen } from './src/screens/PublishScreen';
+import { ProfileScreen } from './src/screens/ProfileScreen';
+import { ListingDetailScreen } from './src/screens/ListingDetailScreen';
+import { EditScreen } from './src/screens/EditScreen';
+import { CommunitiesScreen } from './src/screens/CommunitiesScreen';
+import { CommunityWallScreen } from './src/screens/CommunityWallScreen'; // Tu nueva pantalla de la comunidad
+import { EditCommunityScreen } from './src/screens/EditCommunityScreen';
+
 const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
 
-const navTheme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    background: colors.bg,
-  },
-};
-
+// Pestañas principales de la barra inferior
 function MainTabs() {
   return (
     <Tab.Navigator
       initialRouteName="Mercado"
       screenOptions={{
-        headerStyle: { backgroundColor: colors.bg },
-        headerShadowVisible: false,
-        headerTitleStyle: { fontWeight: '800', color: colors.text },
+        headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
         tabBarStyle: {
-          backgroundColor: '#FFFFFF',
+          borderTopWidth: 1,
           borderTopColor: colors.border,
-          elevation: 10,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.05,
-          shadowRadius: 10,
-          height: 70,
-          paddingBottom: 15,
-          paddingTop: 10,
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 8,
         },
       }}
     >
@@ -64,6 +51,7 @@ function MainTabs() {
           ),
         }}
       />
+
       <Tab.Screen
         name="Publicar"
         component={PublishScreen}
@@ -74,6 +62,7 @@ function MainTabs() {
           ),
         }}
       />
+      {/* ¡Comunidades en el segundo lugar! */}
       <Tab.Screen
         name="Comunidades"
         component={CommunitiesScreen}
@@ -84,6 +73,7 @@ function MainTabs() {
           ),
         }}
       />
+
       <Tab.Screen
         name="Perfil"
         component={ProfileScreen}
@@ -100,33 +90,78 @@ function MainTabs() {
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      setLoading(false);
     });
 
-    supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  if (!session) {
-    return (
-      <NavigationContainer theme={navTheme}>
-        <AuthScreen />
-      </NavigationContainer>
-    );
+  if (loading) {
+    return null; // Podrías poner aquí un splash screen o un ActivityIndicator general
   }
 
   return (
-    <NavigationContainer theme={navTheme}>
-      <StatusBar style="dark" />
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Main" component={MainTabs} />
-        <Stack.Screen name="EditListing" component={EditScreen} />
-        {/* 2. NUEVA RUTA REGISTRADA AQUÍ ABAJO 👇 */}
-        <Stack.Screen name="ListingDetail" component={ListingDetailScreen} />
+    <NavigationContainer>
+      <Stack.Navigator>
+        {session ? (
+          <>
+            <Stack.Screen
+              name="MainTabs"
+              component={MainTabs}
+              options={{ headerShown: false }}
+            />
+            {/* Pantallas secundarias que se abren "por encima" de la barra inferior */}
+            <Stack.Screen
+              name="ListingDetail"
+              component={ListingDetailScreen}
+              options={{
+                headerTitle: 'Detalle del libro',
+                headerBackButtonDisplayMode: 'minimal' // ✅ Corrección aplicada
+              }}
+            />
+            <Stack.Screen
+              name="EditListing"
+              component={EditScreen}
+              options={{
+                headerTitle: 'Editar publicación',
+                headerBackButtonDisplayMode: 'minimal' // ✅ Corrección aplicada
+              }}
+            />
+            <Stack.Screen
+              name="CommunityWall"
+              component={CommunityWallScreen}
+              options={({ route }: any) => ({
+                headerTitle: route.params?.community?.name || 'Comunidad',
+                headerBackButtonDisplayMode: 'minimal', // ✅ Corrección aplicada
+                headerTintColor: colors.primary,
+              })}
+            />
+            <Stack.Screen
+              name="EditCommunity"
+              component={EditCommunityScreen}
+              options={{
+                headerTitle: 'Editar Comunidad',
+                headerBackButtonDisplayMode: 'minimal',
+                headerTintColor: colors.primary,
+              }}
+            />
+          </>
+        ) : (
+          <Stack.Screen
+            name="Auth"
+            component={AuthScreen}
+            options={{ headerShown: false }}
+          />
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   );

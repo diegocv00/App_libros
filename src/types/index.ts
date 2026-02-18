@@ -27,9 +27,12 @@ export type Community = {
   location: string | null;
   member_count: number | null;
   created_at: string;
+  photo_url: string | null;
+  creator_id: string | null;
+  admin_ids: string[];
 };
 
-export type CommunityInput = Omit<Community, 'id' | 'created_at' | 'member_count'>;
+export type CommunityInput = Omit<Community, 'id' | 'created_at' | 'member_count' | 'creator_id' | 'admin_ids'>;
 
 export type Draft = {
   id: string;
@@ -62,3 +65,13 @@ export type Rating = {
   comment: string | null;
   created_at: string;
 };
+export type CommunityPost = {
+  id: string;
+  community_id: string;
+  user_id: string;
+  content: string;
+  image_url: string | null;
+  created_at: string;
+};
+
+export type CommunityPostInput = Omit<CommunityPost, 'id' | 'created_at' | 'user_id'>;

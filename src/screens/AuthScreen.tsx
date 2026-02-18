@@ -56,6 +56,23 @@ export function AuthScreen() {
         }
     }
 
+    // NUEVA FUNCIÓN: Recuperar contraseña
+    async function handleResetPassword() {
+        if (!email) {
+            Alert.alert('Error', 'Introduce tu correo electrónico arriba para recuperar la contraseña.');
+            return;
+        }
+        setLoading(true);
+        const { error } = await supabase.auth.resetPasswordForEmail(email);
+        setLoading(false);
+
+        if (error) {
+            Alert.alert('Error', error.message);
+        } else {
+            Alert.alert('Éxito', 'Revisa tu correo electrónico para cambiar la contraseña.');
+        }
+    }
+
     return (
         <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView
@@ -123,6 +140,19 @@ export function AuthScreen() {
                                 </Text>
                             )}
                         </Pressable>
+
+                        {/* NUEVO BOTÓN: Recuperar contraseña (solo en modo Iniciar Sesión) */}
+                        {!isSignUp && (
+                            <Pressable
+                                style={{ alignItems: 'center', marginTop: -5 }}
+                                onPress={handleResetPassword}
+                                disabled={loading}
+                            >
+                                <Text style={{ color: colors.muted, fontSize: 14, fontWeight: '500' }}>
+                                    ¿Olvidaste tu contraseña?
+                                </Text>
+                            </Pressable>
+                        )}
 
                         <Pressable
                             style={styles.switchBtn}
