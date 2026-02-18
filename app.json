@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "App Libros",
+    "slug": "app-libros",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "jsEngine": "hermes",
+    "scheme": "app-libros"
+  }
+}
+
