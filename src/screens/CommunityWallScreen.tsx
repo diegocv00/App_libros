@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TextInput, Pressable, FlatList, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Modal } from 'react-native';
+import { View, Text, TextInput, Pressable, FlatList, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Modal, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { createPost, fetchPostsByCommunity, deleteCommunity, deletePost, fetchCommunityById, addCommunityAdmin } from '../services/communities';
+import { createPost, fetchPostsByCommunity, deleteCommunity, deletePost, fetchCommunityById, addCommunityAdmin, removeCommunityAdmin, fetchCommunityMembers } from '../services/communities';
 import { supabase } from '../lib/supabase';
 import { CommunityPost, Community } from '../types';
 import { colors, radius, spacing } from '../theme';
@@ -12,23 +12,83 @@ export function CommunityWallScreen({ route, navigation }: any) {
     const [community, setCommunity] = useState<Community>(route.params.community);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [posts, setPosts] = useState<CommunityPost[]>([]);
+    const [members, setMembers] = useState<any[]>([]);
     const [text, setText] = useState('');
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
+
+    // Estados para gestión de Admins
     const [showAdminModal, setShowAdminModal] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
         supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id || null));
     }, []);
 
-    // Recarga los datos al volver (por si editaste el grupo)
+    // 1. LÓGICA DE TIEMPO REAL CORREGIDA
+    useEffect(() => {
+        const channel = supabase
+            .channel(`community_${community.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'community_posts',
+                    filter: `community_id=eq.${community.id}`
+                },
+                async (payload) => {
+                    const newPost = payload.new as CommunityPost;
+
+                    // Como el payload de tiempo real no trae el "join" de perfiles, 
+                    // buscamos el nombre rápidamente para inyectarlo en la lista.
+                    const { data: profile } = await supabase
+                        .from('profiles')
+                        .select('full_name')
+                        .eq('id', newPost.user_id)
+                        .single();
+
+                    const postWithProfile = {
+                        ...newPost,
+                        profiles: profile ? { full_name: profile.full_name } : undefined
+                    };
+
+                    setPosts((current) => {
+                        // Evitamos duplicados si el fetch y el insert coinciden
+                        if (current.find(p => p.id === newPost.id)) return current;
+                        return [postWithProfile, ...current];
+                    });
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [community.id]);
+
+    const loadData = async () => {
+        try {
+            const [postsData, membersData] = await Promise.all([
+                fetchPostsByCommunity(community.id),
+                fetchCommunityMembers(community.id)
+            ]);
+            setPosts(postsData);
+            setMembers(membersData);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useFocusEffect(
         useCallback(() => {
             fetchCommunityById(community.id).then(updated => {
                 setCommunity(updated);
                 navigation.setOptions({ headerTitle: updated.name });
             });
-            loadPosts();
+            loadData();
         }, [community.id])
     );
 
@@ -46,30 +106,24 @@ export function CommunityWallScreen({ route, navigation }: any) {
         });
     }, [navigation, currentUserId, community, isAdmin]);
 
-    const loadPosts = async () => {
-        try {
-            const data = await fetchPostsByCommunity(community.id);
-            setPosts(data);
-        } catch (error) {
-            console.error(error);
-        } finally { setLoading(false); }
-    };
-
+    // 2. CORRECCIÓN ERROR TYPESCRIPT EN ALERT
     const showCommunityMenu = () => {
-        const options: any[] = [
+        const options: any[] = [ // Cast a any[] para evitar error de propiedades conocidas
             { text: 'Editar Comunidad', onPress: () => navigation.navigate('EditCommunity', { community }) }
         ];
 
-        // Solo el creador supremo puede dar permisos a otros
         if (isCreator) {
-            options.push({ text: 'Dar permisos de Admin', onPress: () => setShowAdminModal(true) });
+            options.push({ text: 'Gestionar Administradores', onPress: () => setShowAdminModal(true) });
             options.push({
-                text: 'Eliminar Comunidad', style: 'destructive',
+                text: 'Eliminar Comunidad',
+                style: 'destructive',
                 onPress: () => {
                     Alert.alert('Confirmación', '¿Seguro que deseas eliminar TODA la comunidad?', [
                         { text: 'Cancelar', style: 'cancel' },
                         {
-                            text: 'Eliminar', style: 'destructive', onPress: async () => {
+                            text: 'Eliminar',
+                            style: 'destructive',
+                            onPress: async () => {
                                 await deleteCommunity(community.id);
                                 navigation.goBack();
                             }
@@ -79,46 +133,88 @@ export function CommunityWallScreen({ route, navigation }: any) {
             });
         }
         options.push({ text: 'Cancelar', style: 'cancel' });
-
         Alert.alert('Opciones de la Comunidad', '¿Qué deseas hacer?', options);
     };
 
-    const handleMakeAdmin = async (userId: string) => {
+    const handleToggleAdmin = async (userId: string, isCurrentlyAdmin: boolean) => {
         try {
-            await addCommunityAdmin(community.id, community.admin_ids || [], userId);
-            Alert.alert('Éxito', 'El usuario ahora es administrador.');
-            setShowAdminModal(false);
-            setCommunity(await fetchCommunityById(community.id));
+            if (isCurrentlyAdmin) {
+                await removeCommunityAdmin(community.id, community.admin_ids || [], userId);
+                Alert.alert('Éxito', 'Permisos de administrador revocados.');
+            } else {
+                await addCommunityAdmin(community.id, community.admin_ids || [], userId);
+                Alert.alert('Éxito', 'Usuario nombrado administrador.');
+            }
+            const updated = await fetchCommunityById(community.id);
+            setCommunity(updated);
+            loadData();
         } catch (err) {
-            Alert.alert('Error', 'No se pudieron dar permisos.');
+            Alert.alert('Error', 'No se pudo actualizar los permisos.');
         }
     };
 
-    // Extraemos usuarios únicos del chat para el modal de admins (excluyéndote a ti y a los que ya son admin)
-    const candidateUsers = Array.from(new Set(posts.map(p => p.user_id)))
-        .filter(id => id !== currentUserId && !(community.admin_ids || []).includes(id));
+    const handlePostLongPress = (post: CommunityPost) => {
+        const canDelete = post.user_id === currentUserId || isAdmin;
 
-    const handleDeletePost = (postId: string) => {
-        Alert.alert('Eliminar publicación', '¿Seguro que quieres borrar este mensaje?', [
-            { text: 'Cancelar', style: 'cancel' },
-            {
-                text: 'Eliminar', style: 'destructive', onPress: async () => {
-                    await deletePost(postId);
-                    setPosts(prev => prev.filter(p => p.id !== postId));
+        const options: any[] = [
+            { text: 'Reportar mensaje o usuario', onPress: () => handleReport(post) }
+        ];
+
+        if (canDelete) {
+            options.push({
+                text: 'Eliminar mensaje',
+                style: 'destructive',
+                onPress: async () => {
+                    await deletePost(post.id);
+                    setPosts(prev => prev.filter(p => p.id !== post.id));
                 }
-            }
-        ]);
+            });
+        }
+
+        options.push({ text: 'Cancelar', style: 'cancel' });
+        Alert.alert('Opciones de mensaje', 'Selecciona una acción', options);
+    };
+
+    const handleReport = (post: CommunityPost) => {
+        const options: any[] = [
+            { text: 'Spam', onPress: () => sendReport(post, 'Spam') },
+            { text: 'Lenguaje inapropiado', onPress: () => sendReport(post, 'Lenguaje inapropiado') },
+            { text: 'Acoso', onPress: () => sendReport(post, 'Acoso') },
+            { text: 'Cancelar', style: 'cancel' }
+        ];
+        Alert.alert('Reportar contenido', '¿Por qué deseas reportar este mensaje?', options);
+    };
+
+    const sendReport = async (post: CommunityPost, reason: string) => {
+        const { error } = await supabase.from('reports').insert([{
+            reporter_id: currentUserId,
+            reported_user_id: post.user_id,
+            message_id: post.id,
+            reason: reason
+        }]);
+
+        if (error) Alert.alert('Error', 'No se pudo enviar el reporte.');
+        else Alert.alert('Reporte enviado', 'Gracias por ayudarnos a mantener la comunidad segura.');
     };
 
     const handleSend = async () => {
         if (!text.trim()) return;
         setSending(true);
         try {
-            const newPost = await createPost({ community_id: community.id, content: text.trim(), image_url: null });
-            setPosts([newPost, ...posts]);
+            // No necesitamos recargar posts aquí porque el Realtime lo hará automáticamente
+            await createPost({ community_id: community.id, content: text.trim(), image_url: null });
             setText('');
-        } finally { setSending(false); }
+        } catch (err) {
+            Alert.alert('Error', 'No se pudo enviar el mensaje.');
+        } finally {
+            setSending(false);
+        }
     };
+
+    const filteredMembers = members.filter(m =>
+        m.profiles?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        m.user_id.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
     return (
         <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -129,51 +225,87 @@ export function CommunityWallScreen({ route, navigation }: any) {
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={loading ? <ActivityIndicator color={colors.primary} /> : <Text style={styles.emptyText}>Sé el primero en publicar.</Text>}
                 renderItem={({ item }) => {
-                    const canDeletePost = item.user_id === currentUserId || isAdmin;
+                    const isMsgAdmin = (community.admin_ids || []).includes(item.user_id) || item.user_id === community.creator_id;
 
                     return (
-                        <View style={styles.postCard}>
+                        <Pressable
+                            onLongPress={() => handlePostLongPress(item)}
+                            delayLongPress={500}
+                            style={styles.postCard}
+                        >
                             <View style={styles.postHeader}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                    <MaterialIcons name="person" size={20} color={(community.admin_ids || []).includes(item.user_id) || item.user_id === community.creator_id ? colors.primary : colors.muted} />
-                                    <Text style={styles.postDate}>
-                                        {item.user_id === community.creator_id ? '(Creador) ' : (community.admin_ids || []).includes(item.user_id) ? '(Admin) ' : ''}
-                                        {new Date(item.created_at).toLocaleDateString()}
-                                    </Text>
+                                    <MaterialIcons
+                                        name="person"
+                                        size={20}
+                                        color={isMsgAdmin ? colors.primary : colors.muted}
+                                    />
+                                    <View>
+                                        <Text style={styles.authorName}>
+                                            {item.profiles?.full_name || 'Usuario'}
+                                            {item.user_id === community.creator_id ? ' (Creador)' : (community.admin_ids || []).includes(item.user_id) ? ' (Admin)' : ''}
+                                        </Text>
+                                        <Text style={styles.postDate}>
+                                            {new Date(item.created_at).toLocaleDateString()}
+                                        </Text>
+                                    </View>
                                 </View>
-                                {canDeletePost && (
-                                    <Pressable onPress={() => handleDeletePost(item.id)}>
-                                        <MaterialIcons name="delete-outline" size={20} color="#ef4444" />
-                                    </Pressable>
-                                )}
                             </View>
                             <Text style={styles.postContent}>{item.content}</Text>
-                        </View>
+                        </Pressable>
                     );
                 }}
             />
 
-            {/* Modal para elegir nuevos Admins (Basado en usuarios que han comentado) */}
-            <Modal visible={showAdminModal} animationType="fade" transparent>
+            <Modal visible={showAdminModal} animationType="slide" transparent>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Nombrar Administrador</Text>
-                        <Text style={{ marginBottom: 15, color: colors.muted }}>Selecciona un miembro que haya publicado en el muro:</Text>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Gestionar Administradores</Text>
+                            <Pressable onPress={() => setShowAdminModal(false)}>
+                                <MaterialIcons name="close" size={24} color={colors.text} />
+                            </Pressable>
+                        </View>
 
-                        {candidateUsers.length === 0 ? (
-                            <Text style={{ textAlign: 'center', marginVertical: 20 }}>Nadie más ha publicado aún o todos ya son administradores.</Text>
-                        ) : (
-                            candidateUsers.map(uid => (
-                                <Pressable key={uid} style={styles.adminCandidateRow} onPress={() => handleMakeAdmin(uid)}>
-                                    <MaterialIcons name="person" size={24} color={colors.text} />
-                                    <Text style={styles.adminCandidateText}>Usuario: {uid.substring(0, 8)}...</Text>
-                                    <MaterialIcons name="add-moderator" size={24} color={colors.primary} />
-                                </Pressable>
-                            ))
-                        )}
+                        <TextInput
+                            style={styles.searchBar}
+                            placeholder="Buscar miembro por nombre..."
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                        />
 
-                        <Pressable style={[styles.sendButton, { width: '100%', marginTop: 20 }]} onPress={() => setShowAdminModal(false)}>
-                            <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cerrar</Text>
+                        <ScrollView style={{ maxHeight: 400 }}>
+                            <Text style={styles.sectionLabel}>Miembros de la comunidad</Text>
+                            {filteredMembers.map(member => {
+                                const isMemberAdmin = (community.admin_ids || []).includes(member.user_id);
+                                const isMemberCreator = member.user_id === community.creator_id;
+
+                                return (
+                                    <View key={member.user_id} style={styles.adminCandidateRow}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.adminCandidateText}>
+                                                {member.profiles?.full_name || 'Usuario desconocido'}
+                                            </Text>
+                                            {isMemberCreator && <Text style={{ fontSize: 12, color: colors.primary }}>Creador</Text>}
+                                        </View>
+
+                                        {!isMemberCreator && (
+                                            <Pressable
+                                                onPress={() => handleToggleAdmin(member.user_id, isMemberAdmin)}
+                                                style={[styles.actionBtn, isMemberAdmin ? styles.removeBtn : styles.addBtn]}
+                                            >
+                                                <Text style={styles.actionBtnText}>
+                                                    {isMemberAdmin ? 'Quitar Admin' : 'Hacer Admin'}
+                                                </Text>
+                                            </Pressable>
+                                        )}
+                                    </View>
+                                );
+                            })}
+                        </ScrollView>
+
+                        <Pressable style={styles.closeModalBtn} onPress={() => setShowAdminModal(false)}>
+                            <Text style={{ color: '#fff', fontWeight: 'bold' }}>Finalizar</Text>
                         </Pressable>
                     </View>
                 </View>
@@ -181,7 +313,13 @@ export function CommunityWallScreen({ route, navigation }: any) {
 
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
                 <View style={styles.inputContainer}>
-                    <TextInput style={styles.input} placeholder="Escribe algo a la comunidad..." value={text} onChangeText={setText} multiline />
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Escribe algo a la comunidad..."
+                        value={text}
+                        onChangeText={setText}
+                        multiline
+                    />
                     <Pressable style={styles.sendButton} onPress={handleSend} disabled={sending || !text.trim()}>
                         {sending ? <ActivityIndicator color="#fff" size="small" /> : <MaterialIcons name="send" size={20} color="#fff" />}
                     </Pressable>
@@ -194,17 +332,80 @@ export function CommunityWallScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bg },
     listContent: { padding: spacing.md, flexGrow: 1, justifyContent: 'flex-end' },
-    postCard: { backgroundColor: '#fff', padding: spacing.md, borderRadius: radius.md, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border },
+    postCard: {
+        backgroundColor: '#fff',
+        padding: spacing.md,
+        borderRadius: radius.md,
+        marginBottom: spacing.sm,
+        borderWidth: 1,
+        borderColor: colors.border
+    },
     postHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
-    postDate: { fontSize: 12, color: colors.muted, fontWeight: '600' },
-    postContent: { fontSize: 15, color: colors.text },
+    authorName: { fontSize: 14, fontWeight: 'bold', color: colors.text },
+    postDate: { fontSize: 11, color: colors.muted },
+    postContent: { fontSize: 15, color: colors.text, lineHeight: 20 },
     emptyText: { textAlign: 'center', color: colors.muted, marginTop: 40 },
-    inputContainer: { flexDirection: 'row', padding: spacing.sm, backgroundColor: '#fff', borderTopWidth: 1, borderColor: colors.border, alignItems: 'center' },
-    input: { flex: 1, backgroundColor: '#f1f5f9', borderRadius: 20, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, minHeight: 40, maxHeight: 100 },
-    sendButton: { backgroundColor: colors.primary, width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginLeft: spacing.sm },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
-    modalContent: { backgroundColor: '#fff', padding: 20, borderRadius: 16 },
-    modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
-    adminCandidateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.border },
-    adminCandidateText: { flex: 1, marginLeft: 10, fontSize: 16 }
+    inputContainer: {
+        flexDirection: 'row',
+        padding: spacing.sm,
+        backgroundColor: '#fff',
+        borderTopWidth: 1,
+        borderColor: colors.border,
+        alignItems: 'center'
+    },
+    input: {
+        flex: 1,
+        backgroundColor: '#f1f5f9',
+        borderRadius: 20,
+        paddingHorizontal: 16,
+        paddingTop: 10,
+        paddingBottom: 10,
+        minHeight: 40,
+        maxHeight: 100
+    },
+    sendButton: {
+        backgroundColor: colors.primary,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: spacing.sm
+    },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    modalContent: {
+        backgroundColor: '#fff',
+        padding: 20,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        minHeight: '70%'
+    },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    modalTitle: { fontSize: 20, fontWeight: 'bold', color: colors.text },
+    sectionLabel: { fontSize: 12, fontWeight: 'bold', color: colors.muted, marginBottom: 15, textTransform: 'uppercase' },
+    searchBar: {
+        backgroundColor: '#f1f5f9',
+        padding: 12,
+        borderRadius: radius.md,
+        marginBottom: 15
+    },
+    adminCandidateRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderColor: colors.border
+    },
+    adminCandidateText: { fontSize: 16, color: colors.text, fontWeight: '500' },
+    actionBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+    addBtn: { backgroundColor: colors.primary + '20' },
+    removeBtn: { backgroundColor: '#fee2e2' },
+    actionBtnText: { fontSize: 12, fontWeight: 'bold', color: colors.primary },
+    closeModalBtn: {
+        backgroundColor: colors.primary,
+        padding: 16,
+        borderRadius: radius.md,
+        alignItems: 'center',
+        marginTop: 20
+    }
 });

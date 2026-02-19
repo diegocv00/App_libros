@@ -4,7 +4,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { ActivityIndicator, Alert, FlatList, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { createCommunity, fetchCommunities } from '../services/communities';
+import { createCommunity, fetchCommunities, joinCommunity } from '../services/communities';
 import { supabase } from '../lib/supabase';
 import { Community } from '../types';
 import { colors, radius, spacing } from '../theme';
@@ -17,6 +17,7 @@ export function CommunitiesScreen() {
   const [communities, setCommunities] = useState<Community[]>([]);
   const [joinedIds, setJoinedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [joiningId, setJoiningId] = useState<string | null>(null); // Control de carga individual para unirse
   const [searchText, setSearchText] = useState('');
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -36,6 +37,7 @@ export function CommunitiesScreen() {
     try {
       const data = await fetchCommunities();
       setCommunities(data);
+      // Aquí podrías cargar también las comunidades a las que ya pertenece el usuario desde la DB
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -43,16 +45,11 @@ export function CommunitiesScreen() {
     }
   }, []);
 
-  // Se recarga cada vez que entras a la pantalla (útil si borraste una desde el muro)
   useFocusEffect(
     useCallback(() => {
       loadCommunities();
     }, [loadCommunities])
   );
-
-  const toggleJoin = (id: string) => {
-    setJoinedIds((prev) => prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]);
-  };
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -65,7 +62,14 @@ export function CommunitiesScreen() {
     if (!canCreate) return;
     setSaving(true);
     try {
-      const created = await createCommunity({ name: form.name.trim(), topic: form.topic.trim(), description: form.description.trim() || 'Sin descripción', rules: '', location: '', photo_url: form.photo });
+      const created = await createCommunity({
+        name: form.name.trim(),
+        topic: form.topic.trim(),
+        description: form.description.trim() || 'Sin descripción',
+        rules: '',
+        location: '',
+        photo_url: form.photo
+      });
       setCommunities((prev) => [created, ...prev]);
       setJoinedIds((prev) => [...prev, created.id]);
       setForm(initialForm);
@@ -74,6 +78,22 @@ export function CommunitiesScreen() {
       Alert.alert('Error', err?.message ?? 'No se pudo crear.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Función corregida para unirse a la comunidad
+  const handleJoin = async (communityId: string) => {
+    if (joiningId) return;
+    setJoiningId(communityId);
+    try {
+      await joinCommunity(communityId);
+      setJoinedIds((prev) => [...prev, communityId]);
+      Alert.alert('¡Éxito!', 'Te has unido a la comunidad');
+    } catch (error: any) {
+      console.error(error);
+      Alert.alert('Error', 'No se pudo unir a la comunidad');
+    } finally {
+      setJoiningId(null); // Asegura que el botón se desbloquee siempre
     }
   };
 
@@ -119,11 +139,11 @@ export function CommunitiesScreen() {
         renderItem={({ item }) => {
           const isCreator = currentUserId === item.creator_id;
           const joined = joinedIds.includes(item.id) || isCreator;
+          const isJoining = joiningId === item.id;
 
           return (
             <Pressable style={styles.card} onPress={() => navigation.navigate('CommunityWall', { community: item })}>
               <View style={styles.cardContent}>
-                {/* ✅ Si no hay foto, ya no se pone una genérica. Se pone un ícono con el color primario */}
                 {item.photo_url ? (
                   <Image source={{ uri: item.photo_url }} style={styles.cardImage} />
                 ) : (
@@ -150,10 +170,20 @@ export function CommunitiesScreen() {
                       <Text style={styles.othersCount}>+{item.member_count || 1}</Text>
                     </View>
                     <Pressable
-                      onPress={(e) => { e.stopPropagation(); toggleJoin(item.id); }}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        if (!joined) handleJoin(item.id); // Llamada a la función de unirse
+                      }}
+                      disabled={joined || isJoining}
                       style={[styles.joinButton, joined ? styles.joinedButton : null]}
                     >
-                      <Text style={[styles.joinButtonText, joined ? styles.joinButtonText : null]}>{joined ? 'Unido' : 'Unirme'}</Text>
+                      {isJoining ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={[styles.joinButtonText, joined ? { color: colors.muted } : null]}>
+                          {joined ? 'Unido' : 'Unirme'}
+                        </Text>
+                      )}
                     </Pressable>
                   </View>
                 </View>
@@ -238,7 +268,7 @@ const styles = StyleSheet.create({
   memberAvatars: { flexDirection: 'row', alignItems: 'center' },
   avatarStack: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#fff' },
   othersCount: { fontSize: 10, fontWeight: '700', color: colors.muted, marginLeft: 4 },
-  joinButton: { backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 },
+  joinButton: { backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, minWidth: 80, alignItems: 'center' },
   joinedButton: { backgroundColor: '#f1f5f9' },
   joinButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   emptyText: { textAlign: 'center', color: colors.muted, marginTop: 40 },

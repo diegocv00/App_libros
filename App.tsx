@@ -19,6 +19,7 @@ import { EditScreen } from './src/screens/EditScreen';
 import { CommunitiesScreen } from './src/screens/CommunitiesScreen';
 import { CommunityWallScreen } from './src/screens/CommunityWallScreen';
 import { EditCommunityScreen } from './src/screens/EditCommunityScreen';
+import { ChatScreen } from './src/screens/ChatScreen'; // ✅ Nueva pantalla importada
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -116,7 +117,6 @@ export default function App() {
               options={{ headerShown: false }}
             />
 
-            {/* ✅ CAMBIO: Quitamos el header nativo porque ListingDetailScreen ya tiene el suyo propio (transparente y con botones flotantes) */}
             <Stack.Screen
               name="ListingDetail"
               component={ListingDetailScreen}
@@ -124,6 +124,18 @@ export default function App() {
                 headerShown: false,
                 animation: 'slide_from_right'
               }}
+            />
+
+            {/* ✅ Nueva pantalla de Chat añadida al Stack */}
+            <Stack.Screen
+              name="Chat"
+              component={ChatScreen}
+              options={({ route }: any) => ({
+                headerTitle: route.params?.conversation?.listing?.title || 'Chat con el vendedor',
+                headerTintColor: colors.primary,
+                headerTitleStyle: { fontWeight: 'bold' },
+                headerBackTitleVisible: false,
+              })}
             />
 
             <Stack.Screen

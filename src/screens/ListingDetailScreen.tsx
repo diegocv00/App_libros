@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     StyleSheet,
     View,
@@ -14,12 +14,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '../theme';
 import { formatCurrency } from '../utils/formatters';
+import { supabase } from '../lib/supabase';
+import { getOrCreateConversation } from '../services/chat'; // Asegúrate de haber creado este servicio
 
 const { width } = Dimensions.get('window');
 
 export function ListingDetailScreen({ route, navigation }: any) {
-    // ✅ Obtenemos los datos del libro pasados por la navegación
     const { listing } = route.params;
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [isOwner, setIsOwner] = useState(false);
+
+    useEffect(() => {
+        // Obtenemos el usuario actual para saber si es el dueño del libro
+        supabase.auth.getUser().then(({ data }) => {
+            const userId = data.user?.id || null;
+            setCurrentUserId(userId);
+            setIsOwner(userId === listing.seller_id);
+        });
+    }, [listing.seller_id]);
 
     const handleShare = async () => {
         try {
@@ -28,6 +40,30 @@ export function ListingDetailScreen({ route, navigation }: any) {
             });
         } catch (error: any) {
             Alert.alert('Error', error.message);
+        }
+    };
+
+    const handleContactSeller = async () => {
+        try {
+            if (!currentUserId) {
+                Alert.alert('Inicia sesión', 'Debes estar identificado para contactar al vendedor.');
+                return;
+            }
+
+            if (isOwner) {
+                // Si es el dueño, redirigimos a edición en lugar de chat
+                navigation.navigate('EditListing', { listing });
+                return;
+            }
+
+            // Llamamos al servicio para obtener o crear la conversación
+            const conversation = await getOrCreateConversation(listing.id, listing.seller_id);
+
+            // Navegamos a la pantalla de Chat (debes tenerla registrada en App.tsx)
+            navigation.navigate('Chat', { conversation });
+
+        } catch (error: any) {
+            Alert.alert('Error', 'No se pudo iniciar el chat: ' + error.message);
         }
     };
 
@@ -92,13 +128,15 @@ export function ListingDetailScreen({ route, navigation }: any) {
 
                     <View style={styles.divider} />
 
-                    {/* Perfil del Vendedor (Simulado por ahora) */}
+                    {/* Perfil del Vendedor */}
                     <View style={styles.sellerCard}>
                         <View style={styles.sellerAvatar}>
                             <MaterialIcons name="person" size={30} color={colors.muted} />
                         </View>
                         <View style={styles.sellerInfo}>
-                            <Text style={styles.sellerName}>Vendedor de App Libros</Text>
+                            <Text style={styles.sellerName}>
+                                {isOwner ? "Tú eres el vendedor" : "Vendedor de App Libros"}
+                            </Text>
                             <Text style={styles.sellerRating}>
                                 <MaterialIcons name="star" size={14} color="#f59e0b" /> 4.8 (12 ventas)
                             </Text>
@@ -110,11 +148,13 @@ export function ListingDetailScreen({ route, navigation }: any) {
             {/* Botón de Acción Fijo abajo */}
             <View style={styles.footer}>
                 <Pressable
-                    style={styles.buyBtn}
-                    onPress={() => Alert.alert('Próximamente', 'La función de chat y compra estará disponible pronto.')}
+                    style={[styles.buyBtn, isOwner && { backgroundColor: colors.muted }]}
+                    onPress={handleContactSeller}
                 >
-                    <MaterialIcons name="chat" size={20} color="#fff" />
-                    <Text style={styles.buyBtnText}>Contactar al vendedor</Text>
+                    <MaterialIcons name={isOwner ? "edit" : "chat"} size={20} color="#fff" />
+                    <Text style={styles.buyBtnText}>
+                        {isOwner ? "Gestionar publicación" : "Contactar al vendedor"}
+                    </Text>
                 </Pressable>
             </View>
         </SafeAreaView>
@@ -262,7 +302,7 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         padding: spacing.lg,
-        paddingBottom: 34, // Espacio para el home indicator de iOS
+        paddingBottom: 34,
         backgroundColor: '#fff',
         borderTopWidth: 1,
         borderTopColor: colors.border,

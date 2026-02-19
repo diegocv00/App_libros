@@ -1,4 +1,12 @@
-﻿export type Listing = {
+﻿// Perfil de usuario para mostrar nombres y avatares
+export type Profile = {
+  id: string;
+  full_name: string;
+  avatar_url?: string;
+};
+
+// --- LIBROS / LISTINGS ---
+export type Listing = {
   id: string;
   title: string;
   author: string;
@@ -18,6 +26,7 @@
 
 export type ListingInput = Omit<Listing, 'id' | 'created_at'>;
 
+// --- COMUNIDADES ---
 export type Community = {
   id: string;
   name: string;
@@ -34,6 +43,48 @@ export type Community = {
 
 export type CommunityInput = Omit<Community, 'id' | 'created_at' | 'member_count' | 'creator_id' | 'admin_ids'>;
 
+export type CommunityPost = {
+  id: string;
+  community_id: string;
+  user_id: string;
+  content: string;
+  image_url: string | null;
+  created_at: string;
+  // Join con perfiles para mostrar quién escribió el mensaje
+  profiles?: {
+    full_name: string;
+    avatar_url?: string;
+  };
+};
+
+export type CommunityPostInput = Omit<CommunityPost, 'id' | 'created_at' | 'user_id' | 'profiles'>;
+
+// --- CHAT ---
+export type Conversation = {
+  id: string;
+  listing_id: string;
+  buyer_id: string;
+  seller_id: string;
+  created_at: string;
+  // Información extendida para la interfaz
+  listing?: {
+    title: string;
+    photo_url: string | null;
+  };
+  buyer_profile?: Profile;
+  seller_profile?: Profile;
+};
+
+export type Message = {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  content: string;
+  is_read: boolean;
+  created_at: string;
+};
+
+// --- OTROS ---
 export type Draft = {
   id: string;
   user_id: string;
@@ -65,13 +116,11 @@ export type Rating = {
   comment: string | null;
   created_at: string;
 };
-export type CommunityPost = {
-  id: string;
-  community_id: string;
-  user_id: string;
-  content: string;
-  image_url: string | null;
-  created_at: string;
-};
 
-export type CommunityPostInput = Omit<CommunityPost, 'id' | 'created_at' | 'user_id'>;
+export type ReportInput = {
+  reporter_id?: string;
+  reported_user_id: string;
+  message_id?: string;
+  reason: string;
+  status?: 'pending' | 'reviewed' | 'resolved';
+};
