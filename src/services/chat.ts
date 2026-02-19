@@ -133,3 +133,19 @@ export async function fetchUserConversations(): Promise<Conversation[]> {
     if (error) throw error;
     return data as Conversation[];
 }
+
+// 7. NUEVA FUNCIÓN: Obtener conteo de mensajes no leídos globalmente
+export async function getUnreadCount(): Promise<number> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return 0;
+
+    // Solo contará los mensajes no leídos de los que tú NO seas el remitente
+    const { count, error } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_read', false)
+        .neq('sender_id', user.id);
+
+    if (error) return 0;
+    return count || 0;
+}

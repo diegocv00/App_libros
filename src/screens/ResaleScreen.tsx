@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useState, useMemo } from 'react';
+﻿import React, { useCallback, useState, useMemo, useEffect } from 'react';
 import {
   FlatList,
   Image,
@@ -17,6 +17,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { fetchListings, fetchFavorites, toggleFavorite, fetchFavoriteIds } from '../services/listings';
+import { getUnreadCount } from '../services/chat';
+import { supabase } from '../lib/supabase';
 import { Listing } from '../types';
 import { colors, radius, spacing } from '../theme';
 import { formatCurrency } from '../utils/formatters';
@@ -38,6 +40,9 @@ export function ResaleScreen() {
   const [showFavorites, setShowFavorites] = useState(false);
   const [favorites, setFavorites] = useState<Listing[]>([]);
   const [favLoading, setFavLoading] = useState(false);
+
+  // ✅ Nuevo estado para la campanita
+  const [unreadMessages, setUnreadMessages] = useState(0);
 
   // Filtrado de libros basado en búsqueda y categoría
   const filteredListings = useMemo(() => {
@@ -68,16 +73,36 @@ export function ResaleScreen() {
     }
   }, []);
 
+  // ✅ Obtener mensajes no leídos
+  const fetchUnread = async () => {
+    const count = await getUnreadCount();
+    setUnreadMessages(count);
+  };
+
   // ✅ Recarga automática cuando la pantalla gana el foco (vuelves de otra pestaña)
   useFocusEffect(
     useCallback(() => {
       loadListings(false);
+      fetchUnread(); // Revisar mensajes no leídos al entrar
     }, [loadListings])
   );
+
+  // ✅ Escuchar nuevos mensajes en tiempo real para la campanita
+  useEffect(() => {
+    const channel = supabase
+      .channel('public:messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
+        fetchUnread();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
     await loadListings(false);
+    await fetchUnread(); // Actualizar también la campana al refrescar
     setRefreshing(false);
   };
 
@@ -125,8 +150,15 @@ export function ResaleScreen() {
           <Pressable style={styles.iconBtn} onPress={openFavorites}>
             <MaterialIcons name="favorite" size={20} color={colors.primary} />
           </Pressable>
-          <Pressable style={styles.iconBtn}>
+
+          {/* ✅ Campanita con notificador */}
+          <Pressable style={styles.iconBtn} onPress={() => navigation.navigate('Inbox')}>
             <MaterialIcons name="notifications-none" size={20} color={colors.text} />
+            {unreadMessages > 0 && (
+              <View style={styles.badgeContainer}>
+                <Text style={styles.badgeText}>{unreadMessages > 9 ? '9+' : unreadMessages}</Text>
+              </View>
+            )}
           </Pressable>
         </View>
       </View>
@@ -319,6 +351,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     alignItems: 'center', justifyContent: 'center',
   },
+
+  // ✅ Estilos nuevos para el círculo rojo de la campanita
+  badgeContainer: {
+    position: 'absolute', top: -2, right: -2, backgroundColor: '#ef4444',
+    borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 4, borderWidth: 1.5, borderColor: '#fff'
+  },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+
   searchContainer: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#f1f5f9',

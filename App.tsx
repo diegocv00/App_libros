@@ -19,7 +19,8 @@ import { EditScreen } from './src/screens/EditScreen';
 import { CommunitiesScreen } from './src/screens/CommunitiesScreen';
 import { CommunityWallScreen } from './src/screens/CommunityWallScreen';
 import { EditCommunityScreen } from './src/screens/EditCommunityScreen';
-import { ChatScreen } from './src/screens/ChatScreen'; // ✅ Nueva pantalla importada
+import { ChatScreen } from './src/screens/ChatScreen';
+import { InboxScreen } from './src/screens/InboxScreen'; // ✅ Importada la nueva pantalla
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -126,16 +127,23 @@ export default function App() {
               }}
             />
 
-            {/* ✅ Nueva pantalla de Chat añadida al Stack */}
+            {/* Pantalla de Chat con header personalizado */}
             <Stack.Screen
               name="Chat"
               component={ChatScreen}
-              options={({ route }: any) => ({
-                headerTitle: route.params?.conversation?.listing?.title || 'Chat con el vendedor',
+              options={{ headerShown: false }}
+            />
+
+            {/* ✅ Nueva pantalla de Bandeja de Entrada añadida al Stack */}
+            <Stack.Screen
+              name="Inbox"
+              component={InboxScreen}
+              options={{
+                headerTitle: 'Mis Mensajes',
                 headerTintColor: colors.primary,
                 headerTitleStyle: { fontWeight: 'bold' },
-                headerBackTitleVisible: false,
-              })}
+                headerBackTitle: '', // ✅ Esto elimina el texto junto a la flecha sin dar error
+              }}
             />
 
             <Stack.Screen
