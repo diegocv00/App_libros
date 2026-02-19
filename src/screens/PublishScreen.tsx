@@ -14,7 +14,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { createListing, saveDraft } from '../services/listings';
+// ✅ Importamos uploadImage
+import { createListing, saveDraft, uploadImage } from '../services/listings';
 import { supabase } from '../lib/supabase';
 import { colors, radius, spacing } from '../theme';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -109,7 +110,6 @@ export function PublishScreen() {
       return { ...prev, photos: newPhotos, coverIndex: Math.max(0, newCoverIndex) };
     });
   };
-
   const handlePublish = async () => {
     setStatus('');
     if (!canSubmit) { setStatus('Completa al menos el título y el precio.'); return; }
@@ -123,14 +123,25 @@ export function PublishScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuario no autenticado');
 
-      // 1. Capturamos el nuevo libro creado
+      // ✅ 1. CORRECCIÓN: Definimos el tipo para que acepte string o null
+      let publicPhotoUrl: string | null = null;
+
+      if (form.photos.length > 0) {
+        setStatus('Subiendo imagen de portada...');
+        const localUri = form.photos[form.coverIndex];
+        // Ahora TypeScript ya no se queja porque sabe que puede recibir un string
+        publicPhotoUrl = await uploadImage(localUri);
+      }
+
+      // ✅ 2. Crear el libro usando la URL pública de internet
+      setStatus('Publicando libro...');
       const newListing = await createListing({
         title: form.title.trim(),
         author: form.author.trim() || 'Autor no especificado',
         description: form.description.trim() || 'Sin descripción',
         condition: form.condition,
         price: priceValue,
-        photo_url: form.photos.length > 0 ? form.photos[form.coverIndex] : null,
+        photo_url: publicPhotoUrl,
         seller_id: user.id,
         category: null,
         review: null,
@@ -144,10 +155,9 @@ export function PublishScreen() {
         await supabase.from('drafts').delete().eq('id', draftId);
       }
 
-      // 2. Limpiamos el formulario
       setForm(initialForm);
 
-      // 3. NAVEGACIÓN CORRECTA ACTUALIZADA
+      // Navegación tras éxito
       navigation.navigate('MainTabs', { screen: 'Mercado' });
       navigation.navigate('ListingDetail', { listing: newListing });
 

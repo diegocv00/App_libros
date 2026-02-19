@@ -1,6 +1,5 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import React, { useCallback, useState, useMemo } from 'react';
 import {
-  Animated,
   FlatList,
   Image,
   Modal,
@@ -16,19 +15,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-// ✅ IMPORTANTE: Importamos useFocusEffect
-import { useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { fetchListings, fetchFavorites, toggleFavorite, fetchFavoriteIds } from '../services/listings';
 import { Listing } from '../types';
 import { colors, radius, spacing } from '../theme';
 import { formatCurrency } from '../utils/formatters';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = (width - spacing.lg * 2 - spacing.md) / 2;
 
 const CATEGORIES = ['Todo', 'Ficción', 'Ciencia', 'Historia', 'Tecnología', 'Arte', 'Novela', 'Académico', 'Infantil', 'Raro', 'Cómic', 'Poesía', 'Cocina'];
 
 export function ResaleScreen() {
+  const navigation = useNavigation<any>();
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,6 +39,7 @@ export function ResaleScreen() {
   const [favorites, setFavorites] = useState<Listing[]>([]);
   const [favLoading, setFavLoading] = useState(false);
 
+  // Filtrado de libros basado en búsqueda y categoría
   const filteredListings = useMemo(() => {
     return listings.filter((item) => {
       const matchesSearch =
@@ -50,6 +50,7 @@ export function ResaleScreen() {
     });
   }, [listings, searchText, selectedCategory]);
 
+  // Carga de libros y favoritos
   const loadListings = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     setError('');
@@ -63,16 +64,13 @@ export function ResaleScreen() {
     } catch (err: any) {
       setError(err?.message ?? 'No se pudo cargar el mercado.');
     } finally {
-      // ✅ EL CAMBIO ESTÁ AQUÍ: Siempre apagamos el loading al terminar
-      setLoading(false);
+      setLoading(false); // ✅ Se apaga siempre para evitar pantalla infinita de carga
     }
   }, []);
 
-  // ✅ NUEVO: Recarga los libros en segundo plano cada vez que se entra a esta pestaña
+  // ✅ Recarga automática cuando la pantalla gana el foco (vuelves de otra pestaña)
   useFocusEffect(
     useCallback(() => {
-      // Pasamos false para que no muestre el spinner de carga gigante 
-      // y no interrumpa si el usuario ya está viendo libros.
       loadListings(false);
     }, [loadListings])
   );
@@ -188,7 +186,11 @@ export function ResaleScreen() {
         renderItem={({ item }) => {
           const isFav = favoriteIds.has(item.id);
           return (
-            <View style={styles.bookCard}>
+            <Pressable
+              style={styles.bookCard}
+              // ✅ Navegación a la pantalla de detalles
+              onPress={() => navigation.navigate('ListingDetail', { listing: item })}
+            >
               <View style={styles.imageContainer}>
                 <Image
                   source={{ uri: item.photo_url || 'https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=200&auto=format&fit=crop' }}
@@ -196,7 +198,10 @@ export function ResaleScreen() {
                 />
                 <Pressable
                   style={[styles.favBtn, isFav && styles.favBtnActive]}
-                  onPress={() => handleToggleFavorite(item)}
+                  onPress={(e) => {
+                    e.stopPropagation(); // ✅ Evita que el clic en el corazón abra el detalle
+                    handleToggleFavorite(item);
+                  }}
                 >
                   <MaterialIcons
                     name={isFav ? 'favorite' : 'favorite-border'}
@@ -215,7 +220,7 @@ export function ResaleScreen() {
                 <Text style={styles.bookAuthor} numberOfLines={1}>{item.author}</Text>
                 <Text style={styles.bookPrice}>{formatCurrency(item.price)}</Text>
               </View>
-            </View>
+            </Pressable>
           );
         }}
       />
@@ -253,7 +258,13 @@ export function ResaleScreen() {
               columnWrapperStyle={styles.row}
               contentContainerStyle={[styles.list, { paddingTop: spacing.md }]}
               renderItem={({ item }) => (
-                <View style={styles.bookCard}>
+                <Pressable
+                  style={styles.bookCard}
+                  onPress={() => {
+                    setShowFavorites(false);
+                    navigation.navigate('ListingDetail', { listing: item });
+                  }}
+                >
                   <View style={styles.imageContainer}>
                     <Image
                       source={{ uri: item.photo_url || 'https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=200&auto=format&fit=crop' }}
@@ -261,7 +272,8 @@ export function ResaleScreen() {
                     />
                     <Pressable
                       style={[styles.favBtn, styles.favBtnActive]}
-                      onPress={async () => {
+                      onPress={async (e) => {
+                        e.stopPropagation();
                         await toggleFavorite(item.id, true);
                         setFavorites(prev => prev.filter(f => f.id !== item.id));
                         setFavoriteIds(prev => {
@@ -279,7 +291,7 @@ export function ResaleScreen() {
                     <Text style={styles.bookAuthor} numberOfLines={1}>{item.author}</Text>
                     <Text style={styles.bookPrice}>{formatCurrency(item.price)}</Text>
                   </View>
-                </View>
+                </Pressable>
               )}
             />
           )}

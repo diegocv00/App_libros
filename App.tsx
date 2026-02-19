@@ -17,7 +17,7 @@ import { ProfileScreen } from './src/screens/ProfileScreen';
 import { ListingDetailScreen } from './src/screens/ListingDetailScreen';
 import { EditScreen } from './src/screens/EditScreen';
 import { CommunitiesScreen } from './src/screens/CommunitiesScreen';
-import { CommunityWallScreen } from './src/screens/CommunityWallScreen'; // Tu nueva pantalla de la comunidad
+import { CommunityWallScreen } from './src/screens/CommunityWallScreen';
 import { EditCommunityScreen } from './src/screens/EditCommunityScreen';
 
 const Stack = createNativeStackNavigator();
@@ -45,7 +45,6 @@ function MainTabs() {
         name="Mercado"
         component={ResaleScreen}
         options={{
-          headerTitle: 'Mercado',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="shopping-bag" size={size} color={color} />
           ),
@@ -56,18 +55,16 @@ function MainTabs() {
         name="Publicar"
         component={PublishScreen}
         options={{
-          headerTitle: 'Publicar libro',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="add-circle-outline" size={size} color={color} />
           ),
         }}
       />
-      {/* ¡Comunidades en el segundo lugar! */}
+
       <Tab.Screen
         name="Comunidades"
         component={CommunitiesScreen}
         options={{
-          headerTitle: 'Comunidades',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="groups" size={size} color={color} />
           ),
@@ -78,7 +75,6 @@ function MainTabs() {
         name="Perfil"
         component={ProfileScreen}
         options={{
-          headerTitle: 'Perfil',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="person-outline" size={size} color={color} />
           ),
@@ -106,7 +102,7 @@ export default function App() {
   }, []);
 
   if (loading) {
-    return null; // Podrías poner aquí un splash screen o un ActivityIndicator general
+    return null;
   }
 
   return (
@@ -119,38 +115,40 @@ export default function App() {
               component={MainTabs}
               options={{ headerShown: false }}
             />
-            {/* Pantallas secundarias que se abren "por encima" de la barra inferior */}
+
+            {/* ✅ CAMBIO: Quitamos el header nativo porque ListingDetailScreen ya tiene el suyo propio (transparente y con botones flotantes) */}
             <Stack.Screen
               name="ListingDetail"
               component={ListingDetailScreen}
               options={{
-                headerTitle: 'Detalle del libro',
-                headerBackButtonDisplayMode: 'minimal' // ✅ Corrección aplicada
+                headerShown: false,
+                animation: 'slide_from_right'
               }}
             />
+
             <Stack.Screen
               name="EditListing"
               component={EditScreen}
               options={{
                 headerTitle: 'Editar publicación',
-                headerBackButtonDisplayMode: 'minimal' // ✅ Corrección aplicada
+                headerTintColor: colors.primary,
               }}
             />
+
             <Stack.Screen
               name="CommunityWall"
               component={CommunityWallScreen}
               options={({ route }: any) => ({
                 headerTitle: route.params?.community?.name || 'Comunidad',
-                headerBackButtonDisplayMode: 'minimal', // ✅ Corrección aplicada
                 headerTintColor: colors.primary,
               })}
             />
+
             <Stack.Screen
               name="EditCommunity"
               component={EditCommunityScreen}
               options={{
                 headerTitle: 'Editar Comunidad',
-                headerBackButtonDisplayMode: 'minimal',
                 headerTintColor: colors.primary,
               }}
             />

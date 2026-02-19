@@ -16,17 +16,21 @@ export async function createListing(input: ListingInput): Promise<Listing> {
 }
 
 /** Fetch all listings EXCEPT those belonging to the current user */
-/** Fetch all listings (sin ocultar los del usuario actual) */
 export async function fetchListings(): Promise<Listing[]> {
-  const { data, error } = await supabase
+  const { data: { user } } = await supabase.auth.getUser();
+
+  let query = supabase
     .from('listings')
     .select('*')
     .order('created_at', { ascending: false });
 
-  if (error) {
-    throw error;
+  // Si hay un usuario, ocultamos sus propias publicaciones del mercado global
+  if (user) {
+    query = query.neq('seller_id', user.id);
   }
 
+  const { data, error } = await query;
+  if (error) throw error;
   return (data ?? []) as Listing[];
 }
 
@@ -136,9 +140,13 @@ export async function fetchFavoriteIds(): Promise<string[]> {
   const { data, error } = await supabase
     .from('favorites')
     .select('listing_id')
-    .eq('user_id', user.id);
+    .eq('user_id', user.id); // <--- Debe ser user_id para coincidir con tus archivos
 
-  if (error) throw error;
+  if (error) {
+    console.error("Error en fetchFavoriteIds:", error);
+    throw error;
+  }
+
   return (data ?? []).map((f: any) => f.listing_id);
 }
 
@@ -204,4 +212,28 @@ export async function submitRating(sellerId: string, listingId: string, stars: n
     });
 
   if (error) throw error;
+}
+
+
+// Función para convertir la imagen local en una URL pública de Supabase
+export async function uploadImage(uri: string): Promise<string | null> {
+  const fileName = `${Math.random()}.jpg`;
+  const formData = new FormData();
+  formData.append('file', {
+    uri,
+    name: fileName,
+    type: 'image/jpeg',
+  } as any);
+
+  const { data, error } = await supabase.storage
+    .from('photos')
+    .upload(fileName, formData);
+
+  if (error) throw error;
+
+  const { data: publicUrl } = supabase.storage
+    .from('photos')
+    .getPublicUrl(data.path);
+
+  return publicUrl.publicUrl;
 }
