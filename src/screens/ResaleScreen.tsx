@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Animated,
   FlatList,
@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+// ✅ IMPORTANTE: Importamos useFocusEffect
+import { useFocusEffect } from '@react-navigation/native';
 import { fetchListings, fetchFavorites, toggleFavorite, fetchFavoriteIds } from '../services/listings';
 import { Listing } from '../types';
 import { colors, radius, spacing } from '../theme';
@@ -61,13 +63,19 @@ export function ResaleScreen() {
     } catch (err: any) {
       setError(err?.message ?? 'No se pudo cargar el mercado.');
     } finally {
-      if (showLoading) setLoading(false);
+      // ✅ EL CAMBIO ESTÁ AQUÍ: Siempre apagamos el loading al terminar
+      setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    loadListings();
-  }, [loadListings]);
+  // ✅ NUEVO: Recarga los libros en segundo plano cada vez que se entra a esta pestaña
+  useFocusEffect(
+    useCallback(() => {
+      // Pasamos false para que no muestre el spinner de carga gigante 
+      // y no interrumpa si el usuario ya está viendo libros.
+      loadListings(false);
+    }, [loadListings])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -77,7 +85,6 @@ export function ResaleScreen() {
 
   const handleToggleFavorite = async (item: Listing) => {
     const isFav = favoriteIds.has(item.id);
-    // Optimistic update
     setFavoriteIds(prev => {
       const next = new Set(prev);
       if (isFav) next.delete(item.id);
@@ -87,7 +94,6 @@ export function ResaleScreen() {
     try {
       await toggleFavorite(item.id, isFav);
     } catch {
-      // Revert on error
       setFavoriteIds(prev => {
         const next = new Set(prev);
         if (isFav) next.add(item.id);
@@ -214,7 +220,6 @@ export function ResaleScreen() {
         }}
       />
 
-      {/* Favorites Modal */}
       <Modal
         visible={showFavorites}
         animationType="slide"
@@ -343,7 +348,6 @@ const styles = StyleSheet.create({
   emptyText: { textAlign: 'center', color: colors.muted, marginTop: 12, fontSize: 14 },
   emptyTitle: { fontSize: 18, fontWeight: '800', color: colors.text, marginTop: 16 },
   emptySubtitle: { fontSize: 13, color: colors.muted, textAlign: 'center', marginTop: 8, lineHeight: 20 },
-  // Modal
   modalSafe: { flex: 1, backgroundColor: colors.bg },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',

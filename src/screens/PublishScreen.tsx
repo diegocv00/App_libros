@@ -33,7 +33,7 @@ const initialForm = {
 };
 
 export function PublishScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const route = useRoute<any>();
 
   const [form, setForm] = useState(initialForm);
@@ -123,7 +123,7 @@ export function PublishScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuario no autenticado');
 
-      // 1. Capturamos el nuevo libro creado (la función ya devuelve el objeto)
+      // 1. Capturamos el nuevo libro creado
       const newListing = await createListing({
         title: form.title.trim(),
         author: form.author.trim() || 'Autor no especificado',
@@ -131,9 +131,13 @@ export function PublishScreen() {
         condition: form.condition,
         price: priceValue,
         photo_url: form.photos.length > 0 ? form.photos[form.coverIndex] : null,
-        photos: form.photos,
         seller_id: user.id,
-        category: null, review: null, publisher: null, edition: null, year: null, location: null,
+        category: null,
+        review: null,
+        publisher: null,
+        edition: null,
+        year: null,
+        location: null,
       });
 
       if (draftId) {
@@ -143,11 +147,8 @@ export function PublishScreen() {
       // 2. Limpiamos el formulario
       setForm(initialForm);
 
-      // 3. NAVEGACIÓN CORRECTA:
-      // Primero saltamos a la pestaña de Mercado para que sea el "fondo" al volver
-      navigation.navigate('Main', { screen: 'Mercado' });
-
-      // Luego navegamos a la pantalla de detalle con el nuevo libro
+      // 3. NAVEGACIÓN CORRECTA ACTUALIZADA
+      navigation.navigate('MainTabs', { screen: 'Mercado' });
       navigation.navigate('ListingDetail', { listing: newListing });
 
     } catch (error: any) {

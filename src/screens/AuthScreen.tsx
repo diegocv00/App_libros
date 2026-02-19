@@ -22,6 +22,9 @@ export function AuthScreen() {
     const [loading, setLoading] = useState(false);
     const [isSignUp, setIsSignUp] = useState(false);
 
+    // ✅ NUEVO: Estado para ver/ocultar contraseña
+    const [showPassword, setShowPassword] = useState(false);
+
     async function handleAuth() {
         if (!email || !password) {
             Alert.alert('Error', 'Por favor, rellena todos los campos.');
@@ -118,13 +121,27 @@ export function AuthScreen() {
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Contraseña</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="••••••••"
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry
-                            />
+                            {/* ✅ NUEVO: View contenedor para el input y el ojito */}
+                            <View>
+                                <TextInput
+                                    style={[styles.input, { paddingRight: 50 }]} // padding para no pisar el ícono
+                                    placeholder="••••••••"
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    secureTextEntry={!showPassword} // Muestra u oculta según el estado
+                                />
+                                {/* ✅ NUEVO: Botón del ojito */}
+                                <Pressable
+                                    style={styles.eyeIcon}
+                                    onPress={() => setShowPassword(!showPassword)}
+                                >
+                                    <MaterialIcons
+                                        name={showPassword ? 'visibility' : 'visibility-off'}
+                                        size={24}
+                                        color={colors.muted}
+                                    />
+                                </Pressable>
+                            </View>
                         </View>
 
                         <Pressable
@@ -141,7 +158,7 @@ export function AuthScreen() {
                             )}
                         </Pressable>
 
-                        {/* NUEVO BOTÓN: Recuperar contraseña (solo en modo Iniciar Sesión) */}
+                        {/* BOTÓN: Recuperar contraseña (solo en modo Iniciar Sesión) */}
                         {!isSignUp && (
                             <Pressable
                                 style={{ alignItems: 'center', marginTop: -5 }}
@@ -233,6 +250,16 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         fontSize: 15,
         color: colors.text,
+    },
+    // ✅ NUEVO: Estilo para posicionar el ícono del ojo
+    eyeIcon: {
+        position: 'absolute',
+        right: 16,
+        top: 16,
+        height: 24,
+        width: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     button: {
         height: 56,

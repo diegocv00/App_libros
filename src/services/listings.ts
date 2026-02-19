@@ -16,20 +16,17 @@ export async function createListing(input: ListingInput): Promise<Listing> {
 }
 
 /** Fetch all listings EXCEPT those belonging to the current user */
+/** Fetch all listings (sin ocultar los del usuario actual) */
 export async function fetchListings(): Promise<Listing[]> {
-  const { data: { user } } = await supabase.auth.getUser();
-
-  let query = supabase
+  const { data, error } = await supabase
     .from('listings')
     .select('*')
     .order('created_at', { ascending: false });
 
-  if (user) {
-    query = query.neq('seller_id', user.id);
+  if (error) {
+    throw error;
   }
 
-  const { data, error } = await query;
-  if (error) throw error;
   return (data ?? []) as Listing[];
 }
 
