@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform, SafeAreaView } from 'react-native';
+import { View, Text, FlatList, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform, SafeAreaView, StatusBar } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { fetchMessages, sendMessage, markAsRead } from '../services/chat';
@@ -15,64 +15,61 @@ export function ChatScreen({ route }: any) {
     const [userId, setUserId] = useState<string | null>(null);
     const [otherProfile, setOtherProfile] = useState<Profile | null>(null);
 
-    // src/screens/ChatScreen.tsx
-
     useEffect(() => {
         let channel: any;
 
         const setupChat = async () => {
+            // 1. Obtener usuario actual
             const { data: { user } } = await supabase.auth.getUser();
             const currentId = user?.id || null;
             setUserId(currentId);
 
-            // Determinar con quién estamos hablando para mostrar su nombre
-            if (currentId === conversation.buyer_id) {
-                setOtherProfile(conversation.seller_profile || null);
-            } else {
-                setOtherProfile(conversation.buyer_profile || null);
+            // 2. Identificar el ID de la otra persona
+            const otherUserId = currentId === conversation.buyer_id ? conversation.seller_id : conversation.buyer_id;
+
+            // 3. CONSULTA FORZADA: Traer el perfil más reciente desde la base de datos
+            // Esto garantiza que si el otro usuario cambió su nombre, lo veamos aquí.
+            if (otherUserId) {
+                const { data: freshProfile } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', otherUserId)
+                    .single();
+
+                if (freshProfile) {
+                    setOtherProfile(freshProfile);
+                } else {
+                    // Respaldo por si la consulta falla
+                    setOtherProfile(currentId === conversation.buyer_id ? conversation.seller_profile : conversation.buyer_profile);
+                }
             }
 
-            // Marcar mensajes como leídos al entrar a la pantalla
+            // 4. Marcar como leído y cargar historial
             await markAsRead(conversation.id);
-
-            // 1. Cargar mensajes iniciales
             loadMessages();
 
-            // 2. Suscribirse a nuevos mensajes en tiempo real
+            // 5. Suscripción en tiempo real para mensajes nuevos
             channel = supabase
                 .channel(`chat_${conversation.id}`)
                 .on(
                     'postgres_changes',
-                    {
-                        event: 'INSERT',
-                        schema: 'public',
-                        table: 'messages',
-                        filter: `conversation_id=eq.${conversation.id}`
-                    },
+                    { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversation.id}` },
                     (payload) => {
-                        // Solo añadimos si no está ya en la lista
                         setMessages((current) => {
                             if (current.find(m => m.id === payload.new.id)) return current;
                             return [...current, payload.new as Message];
                         });
-
-                        // Si nos llega un mensaje de la otra persona mientras tenemos el chat abierto, lo marcamos como leído
                         if (payload.new.sender_id !== currentId) {
                             markAsRead(conversation.id);
                         }
                     }
                 )
-                .subscribe((status) => {
-                    console.log("Estado suscripción chat:", status);
-                });
+                .subscribe();
         };
 
         setupChat();
-
-        return () => {
-            if (channel) supabase.removeChannel(channel);
-        };
-    }, [conversation.id]);
+        return () => { if (channel) supabase.removeChannel(channel); };
+    }, [conversation.id]); // Se re-ejecuta si cambia la conversación
 
     const loadMessages = async () => {
         const data = await fetchMessages(conversation.id);
@@ -92,7 +89,8 @@ export function ChatScreen({ route }: any) {
 
     return (
         <SafeAreaView style={styles.safeArea}>
-            {/* Encabezado Personalizado */}
+            <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+
             <View style={styles.customHeader}>
                 <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <MaterialIcons name="arrow-back" size={24} color={colors.text} />
@@ -100,7 +98,8 @@ export function ChatScreen({ route }: any) {
 
                 <View style={styles.headerInfo}>
                     <Text style={styles.headerName}>
-                        {otherProfile?.full_name || 'Usuario'}
+                        {/* Prioridad: full_name fresco > name fresco > Usuario */}
+                        {otherProfile?.full_name || otherProfile?.name || 'Usuario'}
                     </Text>
                     <Text style={styles.headerBook} numberOfLines={1}>
                         <MaterialIcons name="menu-book" size={12} color={colors.muted} /> {conversation.listing?.title}
@@ -108,7 +107,11 @@ export function ChatScreen({ route }: any) {
                 </View>
             </View>
 
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 90}>
+            <KeyboardAvoidingView
+                style={styles.chatContainer}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 90}
+            >
                 <FlatList
                     data={messages}
                     keyExtractor={(item) => item.id}
@@ -120,7 +123,13 @@ export function ChatScreen({ route }: any) {
                     )}
                 />
                 <View style={styles.inputContainer}>
-                    <TextInput style={styles.input} value={text} onChangeText={setText} placeholder="Escribe un mensaje..." multiline />
+                    <TextInput
+                        style={styles.input}
+                        value={text}
+                        onChangeText={setText}
+                        placeholder="Escribe un mensaje..."
+                        multiline
+                    />
                     <Pressable onPress={handleSend} style={styles.sendBtn}>
                         <MaterialIcons name="send" size={24} color={colors.primary} />
                     </Pressable>
@@ -131,20 +140,28 @@ export function ChatScreen({ route }: any) {
 }
 
 const styles = StyleSheet.create({
-    safeArea: { flex: 1, backgroundColor: colors.bg },
+    safeArea: {
+        flex: 1,
+        backgroundColor: '#fff',
+    },
     customHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
+        paddingTop: Platform.OS === 'android' ? 40 : 20,
+        paddingBottom: 15,
         backgroundColor: '#fff',
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
-        elevation: 2, // Sombra en Android
-        shadowColor: '#000', // Sombra en iOS
+        elevation: 3,
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
-        shadowRadius: 2,
+        shadowRadius: 3,
+    },
+    chatContainer: {
+        flex: 1,
+        backgroundColor: colors.bg,
     },
     backBtn: {
         padding: 5,

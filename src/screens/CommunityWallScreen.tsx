@@ -113,9 +113,9 @@ export function CommunityWallScreen({ route, navigation }: any) {
         ];
 
         if (isCreator) {
-            options.push({ text: 'Gestionar Administradores', onPress: () => setShowAdminModal(true) });
+            options.push({ text: 'Gestionar administradores', onPress: () => setShowAdminModal(true) });
             options.push({
-                text: 'Eliminar Comunidad',
+                text: 'Eliminar comunidad',
                 style: 'destructive',
                 onPress: () => {
                     Alert.alert('Confirmación', '¿Seguro que deseas eliminar TODA la comunidad?', [

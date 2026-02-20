@@ -122,15 +122,18 @@ export async function fetchUserConversations(): Promise<Conversation[]> {
     const { data, error } = await supabase
         .from('conversations')
         .select(`
-      *,
-      listing:listings(title, photo_url),
-      buyer_profile:profiles!buyer_id(id, full_name, avatar_url),
-      seller_profile:profiles!seller_id(id, full_name, avatar_url)
-    `)
+          *,
+          listing:listings(title, photo_url),
+          buyer_profile:profiles!buyer_id(*), 
+          seller_profile:profiles!seller_id(*)
+        `)
         .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
         .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+        console.error("Error al traer conversaciones:", error);
+        throw error;
+    }
     return data as Conversation[];
 }
 
@@ -148,4 +151,13 @@ export async function getUnreadCount(): Promise<number> {
 
     if (error) return 0;
     return count || 0;
+}
+
+export async function deleteConversation(conversationId: string): Promise<void> {
+    const { error } = await supabase
+        .from('conversations')
+        .delete()
+        .eq('id', conversationId);
+
+    if (error) throw error;
 }

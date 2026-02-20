@@ -22,6 +22,7 @@ export type Listing = {
   photo_url: string | null;
   seller_id: string;
   created_at: string;
+  stock?: number;
 };
 
 export type ListingInput = Omit<Listing, 'id' | 'created_at'>;
@@ -97,6 +98,8 @@ export type Draft = {
   photos: string[];
   cover_index: number;
   updated_at: string;
+  category?: string;
+  stock?: number;
 };
 
 export type Favorite = {

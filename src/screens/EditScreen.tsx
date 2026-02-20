@@ -19,6 +19,12 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { formatInputPrice, cleanPrice } from '../utils/formatters';
 
 const CONDITIONS = ['Nuevo', 'Como nuevo', 'Buen estado', 'Aceptable'];
+// ✅ Añadimos las categorías
+const CATEGORIES = [
+    'Todo', 'Ficción', 'Ciencia', 'Historia', 'Tecnología',
+    'Arte', 'Novela', 'Académico', 'Infantil', 'Raro',
+    'Cómic', 'Poesía', 'Cocina'
+];
 
 export function EditScreen() {
     const route = useRoute();
@@ -30,6 +36,8 @@ export function EditScreen() {
         author: listing?.author || '',
         description: listing?.description || '',
         condition: listing?.condition || 'Nuevo',
+        category: listing?.category || 'Todo', // ✅ Nuevo
+        stock: listing?.stock ? String(listing.stock) : '1', // ✅ Nuevo
         price: listing ? formatInputPrice(String(listing.price)) : '',
         photos: listing?.photo_url ? [listing.photo_url] : [],
         coverIndex: 0,
@@ -53,12 +61,13 @@ export function EditScreen() {
     }
 
     const canSubmit = useMemo(() => {
-        return form.title.trim().length > 0 && form.price.trim().length > 0;
-    }, [form.price, form.title]);
+        return form.title.trim().length > 0 && form.price.trim().length > 0 && form.stock.trim().length > 0;
+    }, [form.price, form.title, form.stock]);
 
     const updateField = (key: keyof typeof form, value: any) => {
         let finalValue = value;
         if (key === 'price') finalValue = formatInputPrice(value);
+        if (key === 'stock') finalValue = value.replace(/[^0-9]/g, ''); // ✅ Solo números para stock
         setForm((prev) => ({ ...prev, [key]: finalValue }));
     };
 
@@ -69,7 +78,7 @@ export function EditScreen() {
             return;
         }
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
+            mediaTypes: ['images'], // Equivalente a MediaTypeOptions.Images sin importar todo
             allowsMultipleSelection: true,
             quality: 0.8,
         });
@@ -92,11 +101,14 @@ export function EditScreen() {
 
     const handleSave = async () => {
         setStatus('');
-        if (!canSubmit) { setStatus('Completa al menos el título y el precio.'); return; }
+        if (!canSubmit) { setStatus('Completa al menos el título, precio y stock.'); return; }
 
         const rawPrice = cleanPrice(form.price);
         const priceValue = parseInt(rawPrice, 10);
+        const stockValue = parseInt(form.stock, 10); // ✅ Validamos stock
+
         if (isNaN(priceValue) || priceValue <= 0) { setStatus('El precio debe ser un número válido.'); return; }
+        if (isNaN(stockValue) || stockValue < 0) { setStatus('El stock no es válido.'); return; }
 
         setLoading(true);
         try {
@@ -105,6 +117,8 @@ export function EditScreen() {
                 author: form.author.trim() || 'Autor no especificado',
                 description: form.description.trim() || 'Sin descripción',
                 condition: form.condition,
+                category: form.category, // ✅ Actualizar categoría
+                stock: stockValue,       // ✅ Actualizar stock
                 price: priceValue,
                 photo_url: form.photos.length > 0 ? form.photos[form.coverIndex] : null,
             });
@@ -168,6 +182,22 @@ export function EditScreen() {
                         <TextInput style={styles.input} value={form.author}
                             onChangeText={(v) => updateField('author', v)} />
                     </View>
+
+                    {/* ✅ CATEGORÍAS */}
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Categoría</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+                            {CATEGORIES.map((c) => (
+                                <Pressable key={c}
+                                    style={[styles.conditionBtn, { paddingHorizontal: 16, minWidth: 'auto' }, form.category === c ? styles.conditionBtnActive : null]}
+                                    onPress={() => updateField('category', c)}
+                                >
+                                    <Text style={[styles.conditionText, form.category === c ? styles.conditionTextActive : null]}>{c}</Text>
+                                </Pressable>
+                            ))}
+                        </ScrollView>
+                    </View>
+
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Estado</Text>
                         <View style={styles.conditionGrid}>
@@ -181,15 +211,27 @@ export function EditScreen() {
                             ))}
                         </View>
                     </View>
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Precio</Text>
-                        <View style={styles.priceInputRow}>
-                            <Text style={styles.priceSymbol}>$</Text>
-                            <TextInput style={[styles.input, styles.priceInput]}
-                                keyboardType="numeric" value={form.price}
-                                onChangeText={(v) => updateField('price', v)} />
+
+                    {/* ✅ PRECIO Y STOCK */}
+                    <View style={{ flexDirection: 'row', gap: spacing.md }}>
+                        <View style={[styles.inputGroup, { flex: 1.2 }]}>
+                            <Text style={styles.label}>Precio</Text>
+                            <View style={styles.priceInputRow}>
+                                <Text style={styles.priceSymbol}>$</Text>
+                                <TextInput style={[styles.input, styles.priceInput]}
+                                    keyboardType="numeric" value={form.price}
+                                    onChangeText={(v) => updateField('price', v)} />
+                            </View>
+                        </View>
+
+                        <View style={[styles.inputGroup, { flex: 1 }]}>
+                            <Text style={styles.label}>Stock disp.</Text>
+                            <TextInput style={styles.input}
+                                keyboardType="numeric" value={form.stock}
+                                onChangeText={(v) => updateField('stock', v)} />
                         </View>
                     </View>
+
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Descripción</Text>
                         <TextInput style={[styles.input, styles.textArea]} multiline numberOfLines={4}

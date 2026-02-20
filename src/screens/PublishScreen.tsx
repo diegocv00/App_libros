@@ -22,12 +22,20 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { formatInputPrice, cleanPrice } from '../utils/formatters';
 
 const CONDITIONS = ['Nuevo', 'Como nuevo', 'Buen estado', 'Aceptable'];
+// ✅ Añadimos las categorías
+const CATEGORIES = [
+  'Todo', 'Ficción', 'Ciencia', 'Historia', 'Tecnología',
+  'Arte', 'Novela', 'Académico', 'Infantil', 'Raro',
+  'Cómic', 'Poesía', 'Cocina'
+];
 
 const initialForm = {
   title: '',
   author: '',
   description: '',
   condition: 'Nuevo',
+  category: 'Todo', // ✅ Nuevo
+  stock: '1',       // ✅ Nuevo
   price: '',
   photos: [] as string[],
   coverIndex: 0,
@@ -53,6 +61,8 @@ export function PublishScreen() {
         author: draft.author || '',
         description: draft.description || '',
         condition: draft.condition || 'Nuevo',
+        category: draft.category || 'Todo', // ✅ Nuevo
+        stock: draft.stock ? String(draft.stock) : '1', // ✅ Nuevo
         price: draft.price ? String(draft.price) : '',
         photos: Array.isArray(draft.photos) ? draft.photos : [],
         coverIndex: draft.cover_index || 0,
@@ -63,12 +73,14 @@ export function PublishScreen() {
   }, [route.params?.draft]);
 
   const canSubmit = useMemo(() => {
-    return form.title.trim().length > 0 && form.price.trim().length > 0;
-  }, [form.price, form.title]);
+    // ✅ Ahora también exigimos que haya stock
+    return form.title.trim().length > 0 && form.price.trim().length > 0 && form.stock.trim().length > 0;
+  }, [form.price, form.title, form.stock]);
 
   const updateField = (key: keyof typeof form, value: any) => {
     let finalValue = value;
     if (key === 'price') finalValue = formatInputPrice(value);
+    if (key === 'stock') finalValue = value.replace(/[^0-9]/g, ''); // ✅ Solo permitir números
     setForm((prev) => ({ ...prev, [key]: finalValue }));
   };
 
@@ -110,30 +122,31 @@ export function PublishScreen() {
       return { ...prev, photos: newPhotos, coverIndex: Math.max(0, newCoverIndex) };
     });
   };
+
   const handlePublish = async () => {
     setStatus('');
-    if (!canSubmit) { setStatus('Completa al menos el título y el precio.'); return; }
+    if (!canSubmit) { setStatus('Completa al menos el título, precio y stock.'); return; }
 
     const rawPrice = cleanPrice(form.price);
     const priceValue = parseInt(rawPrice, 10);
+    const stockValue = parseInt(form.stock, 10); // ✅ Validar stock
+
     if (isNaN(priceValue) || priceValue <= 0) { setStatus('El precio debe ser un número válido.'); return; }
+    if (isNaN(stockValue) || stockValue < 0) { setStatus('El stock no es válido.'); return; }
 
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuario no autenticado');
 
-      // ✅ 1. CORRECCIÓN: Definimos el tipo para que acepte string o null
       let publicPhotoUrl: string | null = null;
 
       if (form.photos.length > 0) {
         setStatus('Subiendo imagen de portada...');
         const localUri = form.photos[form.coverIndex];
-        // Ahora TypeScript ya no se queja porque sabe que puede recibir un string
         publicPhotoUrl = await uploadImage(localUri);
       }
 
-      // ✅ 2. Crear el libro usando la URL pública de internet
       setStatus('Publicando libro...');
       const newListing = await createListing({
         title: form.title.trim(),
@@ -141,9 +154,10 @@ export function PublishScreen() {
         description: form.description.trim() || 'Sin descripción',
         condition: form.condition,
         price: priceValue,
+        category: form.category, // ✅ Enviamos categoría
+        stock: stockValue,       // ✅ Enviamos stock
         photo_url: publicPhotoUrl,
         seller_id: user.id,
-        category: null,
         review: null,
         publisher: null,
         edition: null,
@@ -157,7 +171,6 @@ export function PublishScreen() {
 
       setForm(initialForm);
 
-      // Navegación tras éxito
       navigation.navigate('MainTabs', { screen: 'Mercado' });
       navigation.navigate('ListingDetail', { listing: newListing });
 
@@ -179,6 +192,8 @@ export function PublishScreen() {
         author: form.author,
         description: form.description,
         condition: form.condition,
+        category: form.category,          // ✅ Guardar categoría en borrador
+        stock: parseInt(form.stock) || 1, // ✅ Guardar stock en borrador
         price: form.price,
         photos: form.photos,
         cover_index: form.coverIndex,
@@ -262,6 +277,21 @@ export function PublishScreen() {
               value={form.author} onChangeText={(v) => updateField('author', v)} />
           </View>
 
+          {/* ✅ CATEGORÍAS */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Categoría</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+              {CATEGORIES.map((c) => (
+                <Pressable key={c}
+                  style={[styles.conditionBtn, { paddingHorizontal: 16, minWidth: 'auto' }, form.category === c ? styles.conditionBtnActive : null]}
+                  onPress={() => updateField('category', c)}
+                >
+                  <Text style={[styles.conditionText, form.category === c ? styles.conditionTextActive : null]}>{c}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Estado del libro</Text>
             <View style={styles.conditionGrid}>
@@ -276,14 +306,24 @@ export function PublishScreen() {
             </View>
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Precio de venta</Text>
-            <View style={styles.priceInputRow}>
-              <Text style={styles.priceSymbol}>$</Text>
-              <TextInput style={[styles.input, styles.priceInput]} placeholder="0" placeholderTextColor="#94a3b8"
-                keyboardType="numeric" value={form.price} onChangeText={(v) => updateField('price', v)} />
+          {/* ✅ PRECIO Y STOCK EN LA MISMA FILA */}
+          <View style={{ flexDirection: 'row', gap: spacing.md }}>
+            <View style={[styles.inputGroup, { flex: 1.2 }]}>
+              <Text style={styles.label}>Precio de venta</Text>
+              <View style={styles.priceInputRow}>
+                <Text style={styles.priceSymbol}>$</Text>
+                <TextInput style={[styles.input, styles.priceInput]} placeholder="0" placeholderTextColor="#94a3b8"
+                  keyboardType="numeric" value={form.price} onChangeText={(v) => updateField('price', v)} />
+              </View>
+              <Text style={styles.hint}>Comisión del 5%.</Text>
             </View>
-            <Text style={styles.hint}>Se aplicará una comisión del 5% al venderse.</Text>
+
+            <View style={[styles.inputGroup, { flex: 1 }]}>
+              <Text style={styles.label}>Stock disp.</Text>
+              <TextInput style={styles.input} placeholder="1" placeholderTextColor="#94a3b8"
+                keyboardType="numeric" value={form.stock} onChangeText={(v) => updateField('stock', v)} />
+              <Text style={styles.hint}>Cantidad total</Text>
+            </View>
           </View>
 
           <View style={styles.inputGroup}>

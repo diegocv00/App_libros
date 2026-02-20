@@ -15,7 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '../theme';
 import { formatCurrency } from '../utils/formatters';
 import { supabase } from '../lib/supabase';
-import { getOrCreateConversation } from '../services/chat'; // Asegúrate de haber creado este servicio
+import { getOrCreateConversation } from '../services/chat';
 
 const { width } = Dimensions.get('window');
 
@@ -23,14 +23,32 @@ export function ListingDetailScreen({ route, navigation }: any) {
     const { listing } = route.params;
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [isOwner, setIsOwner] = useState(false);
+    const [sellerProfile, setSellerProfile] = useState<any>(null);
 
     useEffect(() => {
-        // Obtenemos el usuario actual para saber si es el dueño del libro
+        // 1. Obtenemos el usuario actual para saber si es el dueño del libro
         supabase.auth.getUser().then(({ data }) => {
             const userId = data.user?.id || null;
             setCurrentUserId(userId);
             setIsOwner(userId === listing.seller_id);
         });
+
+        // 2. Buscamos la información real del vendedor
+        const fetchSellerProfile = async () => {
+            if (listing.seller_id) {
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', listing.seller_id)
+                    .single();
+
+                if (data) {
+                    setSellerProfile(data);
+                }
+            }
+        };
+
+        fetchSellerProfile();
     }, [listing.seller_id]);
 
     const handleShare = async () => {
@@ -46,7 +64,7 @@ export function ListingDetailScreen({ route, navigation }: any) {
     const handleContactSeller = async () => {
         try {
             if (!currentUserId) {
-                Alert.alert('Inicia sesión', 'Debes estar identificado para contactar al vendedor.');
+                Alert.alert('Inicia sesión', 'Debes estar identificado para realizar esta acción.');
                 return;
             }
 
@@ -59,11 +77,11 @@ export function ListingDetailScreen({ route, navigation }: any) {
             // Llamamos al servicio para obtener o crear la conversación
             const conversation = await getOrCreateConversation(listing.id, listing.seller_id);
 
-            // Navegamos a la pantalla de Chat (debes tenerla registrada en App.tsx)
+            // Navegamos a la pantalla de Chat
             navigation.navigate('Chat', { conversation });
 
         } catch (error: any) {
-            Alert.alert('Error', 'No se pudo iniciar el chat: ' + error.message);
+            Alert.alert('Error', 'No se pudo iniciar la acción: ' + error.message);
         }
     };
 
@@ -116,6 +134,18 @@ export function ListingDetailScreen({ route, navigation }: any) {
 
                     {/* Ficha técnica rápida */}
                     <View style={styles.specsContainer}>
+                        {/* ✅ NUEVO: Categoría */}
+                        <View style={styles.specItem}>
+                            <MaterialIcons name="category" size={18} color={colors.primary} />
+                            <Text style={styles.specText}>Categoría: {listing.category || 'Todo'}</Text>
+                        </View>
+
+                        {/* ✅ NUEVO: Stock */}
+                        <View style={styles.specItem}>
+                            <MaterialIcons name="inventory" size={18} color={colors.primary} />
+                            <Text style={styles.specText}>Stock disponible: {listing.stock || 1} {listing.stock === 1 ? 'unidad' : 'unidades'}</Text>
+                        </View>
+
                         <View style={styles.specItem}>
                             <MaterialIcons name="location-on" size={18} color={colors.primary} />
                             <Text style={styles.specText}>Ubicación: En línea</Text>
@@ -134,8 +164,12 @@ export function ListingDetailScreen({ route, navigation }: any) {
                             <MaterialIcons name="person" size={30} color={colors.muted} />
                         </View>
                         <View style={styles.sellerInfo}>
+                            {/* ✅ NUEVO: Nombre real del vendedor o su nombre de usuario */}
                             <Text style={styles.sellerName}>
-                                {isOwner ? "Tú eres el vendedor" : "Vendedor de App Libros"}
+                                {isOwner
+                                    ? "Tú eres el vendedor"
+                                    : (sellerProfile?.full_name || sellerProfile?.name || "Vendedor de App Libros")
+                                }
                             </Text>
                             <Text style={styles.sellerRating}>
                                 <MaterialIcons name="star" size={14} color="#f59e0b" /> 4.8 (12 ventas)
@@ -148,7 +182,8 @@ export function ListingDetailScreen({ route, navigation }: any) {
             {/* Botón de Acción Fijo abajo */}
             <View style={styles.footer}>
                 <Pressable
-                    style={[styles.buyBtn, isOwner && { backgroundColor: colors.muted }]}
+                    // ✅ NUEVO: Botón azul si es el dueño
+                    style={[styles.buyBtn, isOwner && { backgroundColor: '#3b82f6' }]}
                     onPress={handleContactSeller}
                 >
                     <MaterialIcons name={isOwner ? "edit" : "chat"} size={20} color="#fff" />
@@ -262,7 +297,7 @@ const styles = StyleSheet.create({
     },
     specText: {
         fontSize: 14,
-        color: colors.muted,
+        color: colors.text, // Mejor contraste para la información
         fontWeight: '500',
     },
     sellerCard: {

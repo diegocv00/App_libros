@@ -5,7 +5,14 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "jsEngine": "hermes",
-    "scheme": "app-libros"
+    "scheme": "app-libros",
+    "extra": {
+      "eas": {
+        "projectId": "5222bf6a-f7c3-4a56-aa6c-cb136fbf881a"
+      }
+    },
+    "android": {
+      "package": "com.diegocv60.applibros"
+    }
   }
 }
-

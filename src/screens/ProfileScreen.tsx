@@ -64,7 +64,8 @@ export function ProfileScreen() {
 
       if (profileData) {
         setProfile({
-          name: profileData.name || user.email?.split('@')[0] || 'Usuario',
+          // Priorizamos full_name (usado en los chats) pero mantenemos compatibilidad con name
+          name: profileData.full_name || profileData.name || user.email?.split('@')[0] || 'Usuario',
           bio: profileData.bio || '',
           avatar: profileData.avatar_url || '',
         });
@@ -115,15 +116,40 @@ export function ProfileScreen() {
   };
 
   const handleSave = async () => {
+    if (!profile.name.trim()) {
+      Alert.alert("Error", "El nombre no puede estar vacío");
+      return;
+    }
+
     setIsEditing(false);
+    setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No autenticado');
-      await supabase.from('profiles').update({
-        name: profile.name, bio: profile.bio, avatar_url: profile.avatar,
-      }).eq('id', user.id);
-    } catch {
-      Alert.alert('Error', 'No se pudo guardar el perfil.');
+
+      // ELIMINAMOS la columna "name" y solo dejamos "full_name" 
+      // que es la que usa el sistema de chat y perfiles de Supabase
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: profile.name.trim(), // Esta es la columna correcta
+          bio: profile.bio,
+          avatar_url: profile.avatar,
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      Alert.alert("Éxito", "Perfil actualizado correctamente");
+      loadData();
+
+    } catch (err: any) {
+      console.error('Error al guardar:', err);
+      // Si el error persiste, es que quizás tu columna se llama "name" 
+      // pero el cache de Supabase está desactualizado.
+      Alert.alert('Error', 'No se pudo guardar: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -173,7 +199,7 @@ export function ProfileScreen() {
           {isEditing ? (
             <View style={styles.editForm}>
               <TextInput style={styles.editInput} value={profile.name}
-                onChangeText={(v) => setProfile(p => ({ ...p, name: v }))} placeholder="Nombre" />
+                onChangeText={(v) => setProfile(p => ({ ...p, name: v }))} placeholder="Nombre completo" />
               <TextInput style={[styles.editInput, styles.editTextArea]} value={profile.bio}
                 onChangeText={(v) => setProfile(p => ({ ...p, bio: v }))} multiline placeholder="Bio" />
               <Pressable style={styles.saveBtn} onPress={handleSave}>

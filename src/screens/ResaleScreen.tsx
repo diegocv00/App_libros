@@ -41,21 +41,27 @@ export function ResaleScreen() {
   const [favorites, setFavorites] = useState<Listing[]>([]);
   const [favLoading, setFavLoading] = useState(false);
 
-  // ✅ Nuevo estado para la campanita
   const [unreadMessages, setUnreadMessages] = useState(0);
 
-  // Filtrado de libros basado en búsqueda y categoría
+  // ✅ Filtro de libros "A prueba de balas"
   const filteredListings = useMemo(() => {
     return listings.filter((item) => {
+      // 1. Evitamos errores si el título o el autor vienen como "null" en la BD
+      const title = item.title || '';
+      const author = item.author || '';
+
       const matchesSearch =
-        item.title.toLowerCase().includes(searchText.toLowerCase()) ||
-        item.author.toLowerCase().includes(searchText.toLowerCase());
-      const matchesCategory = selectedCategory === 'Todo' || item.category === selectedCategory;
+        title.toLowerCase().includes(searchText.toLowerCase()) ||
+        author.toLowerCase().includes(searchText.toLowerCase());
+
+      // 2. Si el libro no tiene categoría asignada (libros viejos), lo tratamos como "Todo"
+      const itemCategory = item.category ? item.category.trim() : 'Todo';
+      const matchesCategory = selectedCategory === 'Todo' || itemCategory === selectedCategory;
+
       return matchesSearch && matchesCategory;
     });
   }, [listings, searchText, selectedCategory]);
 
-  // Carga de libros y favoritos
   const loadListings = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     setError('');
@@ -69,25 +75,22 @@ export function ResaleScreen() {
     } catch (err: any) {
       setError(err?.message ?? 'No se pudo cargar el mercado.');
     } finally {
-      setLoading(false); // ✅ Se apaga siempre para evitar pantalla infinita de carga
+      setLoading(false);
     }
   }, []);
 
-  // ✅ Obtener mensajes no leídos
   const fetchUnread = async () => {
     const count = await getUnreadCount();
     setUnreadMessages(count);
   };
 
-  // ✅ Recarga automática cuando la pantalla gana el foco (vuelves de otra pestaña)
   useFocusEffect(
     useCallback(() => {
       loadListings(false);
-      fetchUnread(); // Revisar mensajes no leídos al entrar
+      fetchUnread();
     }, [loadListings])
   );
 
-  // ✅ Escuchar nuevos mensajes en tiempo real para la campanita
   useEffect(() => {
     const channel = supabase
       .channel('public:messages')
@@ -102,7 +105,7 @@ export function ResaleScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     await loadListings(false);
-    await fetchUnread(); // Actualizar también la campana al refrescar
+    await fetchUnread();
     setRefreshing(false);
   };
 
@@ -151,7 +154,6 @@ export function ResaleScreen() {
             <MaterialIcons name="favorite" size={20} color={colors.primary} />
           </Pressable>
 
-          {/* ✅ Campanita con notificador */}
           <Pressable style={styles.iconBtn} onPress={() => navigation.navigate('Inbox')}>
             <MaterialIcons name="notifications-none" size={20} color={colors.text} />
             {unreadMessages > 0 && (
@@ -167,7 +169,7 @@ export function ResaleScreen() {
         <MaterialIcons name="search" size={20} color={colors.muted} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Busca títulos, autores o ISBN..."
+          placeholder="Busca títulos o autores..."
           placeholderTextColor={colors.muted}
           value={searchText}
           onChangeText={setSearchText}
@@ -220,7 +222,6 @@ export function ResaleScreen() {
           return (
             <Pressable
               style={styles.bookCard}
-              // ✅ Navegación a la pantalla de detalles
               onPress={() => navigation.navigate('ListingDetail', { listing: item })}
             >
               <View style={styles.imageContainer}>
@@ -231,7 +232,7 @@ export function ResaleScreen() {
                 <Pressable
                   style={[styles.favBtn, isFav && styles.favBtnActive]}
                   onPress={(e) => {
-                    e.stopPropagation(); // ✅ Evita que el clic en el corazón abra el detalle
+                    e.stopPropagation();
                     handleToggleFavorite(item);
                   }}
                 >
@@ -250,6 +251,8 @@ export function ResaleScreen() {
               <View style={styles.bookInfo}>
                 <Text style={styles.bookTitle} numberOfLines={1}>{item.title}</Text>
                 <Text style={styles.bookAuthor} numberOfLines={1}>{item.author}</Text>
+                {/* ✅ Agregamos la categoría visible para asegurarnos que está guardando */}
+                <Text style={styles.bookCategory}>{item.category || 'Todo'}</Text>
                 <Text style={styles.bookPrice}>{formatCurrency(item.price)}</Text>
               </View>
             </Pressable>
@@ -351,15 +354,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     alignItems: 'center', justifyContent: 'center',
   },
-
-  // ✅ Estilos nuevos para el círculo rojo de la campanita
   badgeContainer: {
     position: 'absolute', top: -2, right: -2, backgroundColor: '#ef4444',
     borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 4, borderWidth: 1.5, borderColor: '#fff'
   },
   badgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
-
   searchContainer: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#f1f5f9',
@@ -396,6 +396,10 @@ const styles = StyleSheet.create({
   bookInfo: { gap: 2 },
   bookTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
   bookAuthor: { fontSize: 12, color: colors.muted },
+
+  // ✅ Estilo para la nueva categoría visible
+  bookCategory: { fontSize: 11, color: colors.primary, fontWeight: '600', marginTop: 1 },
+
   bookPrice: { fontSize: 15, fontWeight: '800', color: colors.primary, marginTop: 2 },
   emptyContainer: { alignItems: 'center', marginTop: 60, paddingHorizontal: 40 },
   emptyText: { textAlign: 'center', color: colors.muted, marginTop: 12, fontSize: 14 },
