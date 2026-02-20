@@ -81,5 +81,93 @@ export const communityWallStyles = StyleSheet.create({
         borderRadius: radius.md,
         alignItems: 'center',
         marginTop: 20
+    },
+    // ... (tus estilos anteriores)
+
+    // BANNER DE LA COMUNIDAD
+    bannerContainer: {
+        width: '100%',
+        height: 120,
+        backgroundColor: colors.primary,
+        position: 'relative',
+    },
+    bannerImage: {
+        width: '100%',
+        height: '100%',
+    },
+    bannerOverlay: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        padding: spacing.md,
+    },
+    bannerTitle: {
+        color: '#ffffff',
+        fontSize: 20,
+        fontWeight: 'bold',
+    },
+    bannerTopic: {
+        color: '#e2e8f0',
+        fontSize: 14,
+    },
+
+    // IMÁGENES EN MENSAJES Y PREVISUALIZACIÓN
+    postImage: {
+        width: '100%',
+        height: 200,
+        borderRadius: radius.md,
+        marginBottom: spacing.sm,
+        backgroundColor: '#f1f5f9',
+    },
+    imagePreviewContainer: {
+        paddingHorizontal: spacing.md,
+        paddingTop: spacing.md,
+        backgroundColor: '#ffffff',
+        borderTopWidth: 1,
+        borderTopColor: '#f1f5f9',
+    },
+    imagePreviewWrapper: {
+        position: 'relative',
+        width: 100,
+        height: 100,
+    },
+    imagePreview: {
+        width: '100%',
+        height: '100%',
+        borderRadius: radius.md,
+    },
+    removePreviewBtn: {
+        position: 'absolute',
+        top: -8,
+        right: -8,
+        backgroundColor: '#ef4444',
+        borderRadius: 12,
+        padding: 2,
+    },
+    attachBtn: {
+        marginRight: 10,
+        padding: 4,
+    },
+    // VISOR DE IMÁGENES PANTALLA COMPLETA
+    fullScreenOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.95)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    fullScreenCloseBtn: {
+        position: 'absolute',
+        top: 50,
+        right: 20,
+        zIndex: 10,
+        padding: 8,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        borderRadius: 20,
+    },
+    fullScreenImg: {
+        width: '100%',
+        height: '80%',
     }
 });

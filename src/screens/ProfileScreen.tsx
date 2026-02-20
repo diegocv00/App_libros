@@ -65,7 +65,6 @@ export function ProfileScreen() {
 
       if (profileData) {
         setProfile({
-          // Priorizamos full_name (usado en los chats) pero mantenemos compatibilidad con name
           name: profileData.full_name || profileData.name || user.email?.split('@')[0] || 'Usuario',
           bio: profileData.bio || '',
           avatar: profileData.avatar_url || '',
@@ -116,6 +115,26 @@ export function ProfileScreen() {
     );
   };
 
+  const pickAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert("Permisos", "Necesitamos acceso a tu galería para cambiar la foto.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      // CORRECCIÓN: Ahora se usa un arreglo con el texto 'images'
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+    });
+
+    if (!result.canceled) {
+      setProfile(p => ({ ...p, avatar: result.assets[0].uri }));
+    }
+  };
+
   const handleSave = async () => {
     if (!profile.name.trim()) {
       Alert.alert("Error", "El nombre no puede estar vacío");
@@ -124,43 +143,63 @@ export function ProfileScreen() {
 
     setIsEditing(false);
     setLoading(true);
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No autenticado');
 
-      // ELIMINAMOS la columna "name" y solo dejamos "full_name" 
-      // que es la que usa el sistema de chat y perfiles de Supabase
-      const { error } = await supabase
+      let avatarUrlToSave = profile.avatar;
+
+      // 1. Validar si la imagen es una foto recién seleccionada (ruta local)
+      if (profile.avatar && profile.avatar.startsWith('file://')) {
+        const fileExt = profile.avatar.split('.').pop()?.toLowerCase() || 'jpg';
+        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+        const contentType = `image/${fileExt === 'png' ? 'png' : 'jpeg'}`;
+
+        // Usar fetch y arrayBuffer para evitar errores de red en Android
+        const response = await fetch(profile.avatar);
+        const arrayBuffer = await response.arrayBuffer();
+
+        // Subir al bucket 'avatars' de Supabase
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(fileName, arrayBuffer, {
+            contentType: contentType,
+            upsert: true
+          });
+
+        if (uploadError) throw new Error('No se pudo subir la foto de perfil: ' + uploadError.message);
+
+        // Obtener la URL pública generada
+        const { data: publicUrlData } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(fileName);
+
+        avatarUrlToSave = publicUrlData.publicUrl;
+      }
+
+      // 2. Actualizar la base de datos
+      const { error: updateError } = await supabase
         .from('profiles')
         .update({
-          full_name: profile.name.trim(), // Esta es la columna correcta
+          full_name: profile.name.trim(),
           bio: profile.bio,
-          avatar_url: profile.avatar,
+          avatar_url: avatarUrlToSave,
         })
         .eq('id', user.id);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
       Alert.alert("Éxito", "Perfil actualizado correctamente");
+      setProfile(p => ({ ...p, avatar: avatarUrlToSave }));
       loadData();
 
     } catch (err: any) {
       console.error('Error al guardar:', err);
-      // Si el error persiste, es que quizás tu columna se llama "name" 
-      // pero el cache de Supabase está desactualizado.
       Alert.alert('Error', 'No se pudo guardar: ' + err.message);
     } finally {
       setLoading(false);
     }
-  };
-
-  const pickAvatar = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.8,
-    });
-    if (!result.canceled) setProfile(p => ({ ...p, avatar: result.assets[0].uri }));
   };
 
   const handleLogout = async () => {

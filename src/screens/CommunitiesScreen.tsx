@@ -18,7 +18,7 @@ export function CommunitiesScreen() {
   const [communities, setCommunities] = useState<Community[]>([]);
   const [joinedIds, setJoinedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [joiningId, setJoiningId] = useState<string | null>(null); // Control de carga individual para unirse
+  const [joiningId, setJoiningId] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -36,9 +36,23 @@ export function CommunitiesScreen() {
   const loadCommunities = useCallback(async () => {
     setLoading(true);
     try {
+      // 1. Cargamos todas las comunidades
       const data = await fetchCommunities();
       setCommunities(data);
-      // Aquí podrías cargar también las comunidades a las que ya pertenece el usuario desde la DB
+
+      // 2. Cargamos las suscripciones persistentes del usuario actual
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: memberData } = await supabase
+          .from('community_members')
+          .select('community_id')
+          .eq('user_id', user.id);
+
+        if (memberData) {
+          // Guardamos los IDs de las comunidades a las que ya pertenece para mostrar "Unido"
+          setJoinedIds(memberData.map(row => row.community_id));
+        }
+      }
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -55,7 +69,7 @@ export function CommunitiesScreen() {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') return Alert.alert('Permiso denegado', 'Se necesita acceso a la galería.');
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7 });
     if (!result.canceled) setForm(prev => ({ ...prev, photo: result.assets[0].uri }));
   };
 
@@ -82,7 +96,6 @@ export function CommunitiesScreen() {
     }
   };
 
-  // Función corregida para unirse a la comunidad
   const handleJoin = async (communityId: string) => {
     if (joiningId) return;
     setJoiningId(communityId);
@@ -94,7 +107,7 @@ export function CommunitiesScreen() {
       console.error(error);
       Alert.alert('Error', 'No se pudo unir a la comunidad');
     } finally {
-      setJoiningId(null); // Asegura que el botón se desbloquee siempre
+      setJoiningId(null);
     }
   };
 
@@ -173,7 +186,7 @@ export function CommunitiesScreen() {
                     <Pressable
                       onPress={(e) => {
                         e.stopPropagation();
-                        if (!joined) handleJoin(item.id); // Llamada a la función de unirse
+                        if (!joined) handleJoin(item.id);
                       }}
                       disabled={joined || isJoining}
                       style={[styles.joinButton, joined ? styles.joinedButton : null]}

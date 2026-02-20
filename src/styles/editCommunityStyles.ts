@@ -19,5 +19,22 @@ export const editCommunityStyles = StyleSheet.create({
     catTag: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.md, backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: colors.border },
     catTagActive: { backgroundColor: colors.primary, borderColor: colors.primary },
     catText: { fontSize: 13, fontWeight: '600', color: colors.muted },
-    catTextActive: { color: '#fff' }
+    catTextActive: { color: '#fff' },
+
+    // NUEVO: ESTILO PARA EL BOTÓN ELIMINAR FOTO
+    deletePhotoBtn: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        backgroundColor: '#ef4444',
+        padding: 6,
+        borderRadius: 16,
+        borderWidth: 2,
+        borderColor: '#fff',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1,
+    }
 });

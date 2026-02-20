@@ -153,3 +153,13 @@ export async function joinCommunity(communityId: string): Promise<void> {
   // Si el error es por duplicado (P23505), lo ignoramos porque ya es miembro
   if (error && error.code !== '23505') throw error;
 }
+
+export async function removeMember(communityId: string, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from('community_members')
+    .delete()
+    .eq('community_id', communityId)
+    .eq('user_id', userId);
+
+  if (error) throw error;
+}

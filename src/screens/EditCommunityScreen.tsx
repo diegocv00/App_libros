@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
-import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { updateCommunity } from '../services/communities';
+import { supabase } from '../lib/supabase';
 import { colors, radius, spacing } from '../theme';
 import { editCommunityStyles as styles } from '../styles/editCommunityStyles';
 
@@ -11,6 +12,8 @@ const CATEGORIES = ['#Clásicos', '#Sci-Fi', '#Misterio', '#Terror', '#Poesía',
 
 export function EditCommunityScreen({ route, navigation }: any) {
     const { community } = route.params;
+
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
 
     const [form, setForm] = useState({
@@ -21,11 +24,16 @@ export function EditCommunityScreen({ route, navigation }: any) {
     });
 
     const canSave = form.name.trim().length > 0 && form.topic.trim().length > 0;
+    const isCreator = currentUserId === community.creator_id;
+
+    useEffect(() => {
+        supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id || null));
+    }, []);
 
     const pickImage = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') return Alert.alert('Permiso denegado', 'Se necesita acceso a la galería.');
-        const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+        const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7 });
         if (!result.canceled) setForm(prev => ({ ...prev, photo: result.assets[0].uri }));
     };
 
@@ -33,16 +41,43 @@ export function EditCommunityScreen({ route, navigation }: any) {
         if (!canSave) return;
         setSaving(true);
         try {
+            let photoUrlToSave = form.photo;
+
+            // Arreglo para que las nuevas fotos seleccionadas se suban correctamente a Supabase
+            if (form.photo && form.photo.startsWith('file://')) {
+                const fileExt = form.photo.split('.').pop()?.toLowerCase() || 'jpg';
+                const fileName = `community_${community.id}_${Date.now()}.${fileExt}`;
+                const response = await fetch(form.photo);
+                const arrayBuffer = await response.arrayBuffer();
+
+                const { error: uploadError } = await supabase.storage
+                    .from('community_posts')
+                    .upload(fileName, arrayBuffer, {
+                        contentType: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
+                        upsert: true
+                    });
+
+                if (uploadError) throw new Error('No se pudo subir la foto: ' + uploadError.message);
+
+                const { data: publicUrlData } = supabase.storage
+                    .from('community_posts')
+                    .getPublicUrl(fileName);
+
+                photoUrlToSave = publicUrlData.publicUrl;
+            }
+
             await updateCommunity(community.id, {
                 name: form.name.trim(),
                 topic: form.topic.trim(),
                 description: form.description.trim(),
-                photo_url: form.photo,
+                photo_url: photoUrlToSave,
             });
-            Alert.alert('Éxito', 'Comunidad actualizada');
+
+            Alert.alert('Éxito', 'Comunidad actualizada correctamente');
             navigation.goBack();
-        } catch (err) {
-            Alert.alert('Error', 'No se pudo actualizar la comunidad');
+        } catch (err: any) {
+            console.error(err);
+            Alert.alert('Error', err.message || 'No se pudo actualizar la comunidad');
         } finally {
             setSaving(false);
         }
@@ -51,10 +86,30 @@ export function EditCommunityScreen({ route, navigation }: any) {
     return (
         <SafeAreaView style={styles.container} edges={['bottom']}>
             <ScrollView contentContainerStyle={styles.form}>
+
                 <View style={styles.photoSection}>
-                    <Pressable style={styles.photoUploadBtn} onPress={pickImage}>
-                        {form.photo ? <Image source={{ uri: form.photo }} style={styles.uploadedPhoto} /> : <><MaterialIcons name="add-a-photo" size={32} color={colors.primary} /><Text style={styles.photoUploadText}>Cambiar foto</Text></>}
-                    </Pressable>
+                    <View style={{ position: 'relative' }}>
+                        <Pressable style={styles.photoUploadBtn} onPress={pickImage}>
+                            {form.photo ? (
+                                <Image source={{ uri: form.photo }} style={styles.uploadedPhoto} />
+                            ) : (
+                                <>
+                                    <MaterialIcons name="add-a-photo" size={32} color={colors.primary} />
+                                    <Text style={styles.photoUploadText}>Cambiar foto</Text>
+                                </>
+                            )}
+                        </Pressable>
+
+                        {/* BOTÓN PARA ELIMINAR LA FOTO (Solo visible para el Creador de la comunidad) */}
+                        {form.photo && isCreator && (
+                            <Pressable
+                                style={styles.deletePhotoBtn}
+                                onPress={() => setForm(f => ({ ...f, photo: null }))}
+                            >
+                                <MaterialIcons name="delete" size={16} color="#FFF" />
+                            </Pressable>
+                        )}
+                    </View>
                 </View>
 
                 <View style={styles.inputGroup}>
@@ -85,4 +140,3 @@ export function EditCommunityScreen({ route, navigation }: any) {
         </SafeAreaView>
     );
 }
-
