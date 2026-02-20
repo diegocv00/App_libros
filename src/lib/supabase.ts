@@ -1,7 +1,12 @@
 ﻿import { createClient } from '@supabase/supabase-js';
 
-// Usamos process.env directamente
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl!, supabaseAnonKey!);
+const supabaseUrl = 'https://qbgxmvzphblvyvgtmisa.supabase.co';
+const supabaseAnonKey = 'sb_publishable_wKi3Hc-llkCxxJ4gsIjkWQ_q26RNHDW';
+
+if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("Faltan las variables de entorno de Supabase.");
+
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
