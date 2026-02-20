@@ -30,6 +30,7 @@ const Tab = createBottomTabNavigator();
 function MainTabs() {
   return (
     <Tab.Navigator
+      id="MainTabsNavigator"
       initialRouteName="Mercado"
       screenOptions={{
         headerShown: false,
@@ -46,7 +47,7 @@ function MainTabs() {
     >
       <Tab.Screen
         name="Mercado"
-        component={ResaleScreen}
+        component={ResaleScreen as any}
         options={{
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="shopping-bag" size={size} color={color} />
@@ -56,7 +57,7 @@ function MainTabs() {
 
       <Tab.Screen
         name="Publicar"
-        component={PublishScreen}
+        component={PublishScreen as any}
         options={{
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="add-circle-outline" size={size} color={color} />
@@ -66,7 +67,7 @@ function MainTabs() {
 
       <Tab.Screen
         name="Comunidades"
-        component={CommunitiesScreen}
+        component={CommunitiesScreen as any}
         options={{
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="groups" size={size} color={color} />
@@ -76,7 +77,7 @@ function MainTabs() {
 
       <Tab.Screen
         name="Perfil"
-        component={ProfileScreen}
+        component={ProfileScreen as any}
         options={{
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="person-outline" size={size} color={color} />
@@ -110,7 +111,7 @@ export default function App() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator>
+      <Stack.Navigator id="MainStackNavigator">
         {session ? (
           <>
             <Stack.Screen
@@ -140,7 +141,7 @@ export default function App() {
               name="Inbox"
               component={InboxScreen}
               options={{
-                headerTitle: 'Mis Mensajes',
+                headerTitle: 'Mis mensajes',
                 headerTintColor: colors.primary,
                 headerTitleStyle: { fontWeight: 'bold' },
                 headerBackTitle: '', // ✅ Esto elimina el texto junto a la flecha sin dar error

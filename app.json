@@ -12,7 +12,8 @@
       }
     },
     "android": {
-      "package": "com.diegocv60.applibros"
+      "package": "com.diegocv60.applibros",
+      "softwareKeyboardLayoutMode": "resize"
     }
   }
 }

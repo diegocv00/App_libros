@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { colors, radius, spacing } from '../theme';
+import { authStyles } from '../styles/authStyles';
 
 export function AuthScreen() {
     const [email, setEmail] = useState('');
@@ -77,28 +78,28 @@ export function AuthScreen() {
     }
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={authStyles.container}>
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={styles.flex}
+                style={authStyles.flex}
             >
-                <View style={styles.content}>
-                    <View style={styles.header}>
-                        <View style={styles.logoContainer}>
+                <View style={authStyles.content}>
+                    <View style={authStyles.header}>
+                        <View style={authStyles.logoContainer}>
                             <MaterialIcons name="menu-book" size={48} color={colors.primary} />
                         </View>
-                        <Text style={styles.title}>App libros</Text>
-                        <Text style={styles.subtitle}>
+                        <Text style={authStyles.title}>App libros</Text>
+                        <Text style={authStyles.subtitle}>
                             {isSignUp ? 'Crea tu cuenta literaria' : 'Bienvenido de nuevo, lector'}
                         </Text>
                     </View>
 
-                    <View style={styles.form}>
+                    <View style={authStyles.form}>
                         {isSignUp && (
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.label}>Nombre completo</Text>
+                            <View style={authStyles.inputGroup}>
+                                <Text style={authStyles.label}>Nombre completo</Text>
                                 <TextInput
-                                    style={styles.input}
+                                    style={authStyles.input}
                                     placeholder="Tu nombre"
                                     value={name}
                                     onChangeText={setName}
@@ -107,10 +108,10 @@ export function AuthScreen() {
                             </View>
                         )}
 
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Correo electrónico</Text>
+                        <View style={authStyles.inputGroup}>
+                            <Text style={authStyles.label}>Correo electrónico</Text>
                             <TextInput
-                                style={styles.input}
+                                style={authStyles.input}
                                 placeholder="ejemplo@correo.com"
                                 value={email}
                                 onChangeText={setEmail}
@@ -119,12 +120,12 @@ export function AuthScreen() {
                             />
                         </View>
 
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Contraseña</Text>
+                        <View style={authStyles.inputGroup}>
+                            <Text style={authStyles.label}>Contraseña</Text>
                             {/* ✅ NUEVO: View contenedor para el input y el ojito */}
                             <View>
                                 <TextInput
-                                    style={[styles.input, { paddingRight: 50 }]} // padding para no pisar el ícono
+                                    style={[authStyles.input, { paddingRight: 50 }]} // padding para no pisar el ícono
                                     placeholder="••••••••"
                                     value={password}
                                     onChangeText={setPassword}
@@ -132,7 +133,7 @@ export function AuthScreen() {
                                 />
                                 {/* ✅ NUEVO: Botón del ojito */}
                                 <Pressable
-                                    style={styles.eyeIcon}
+                                    style={authStyles.eyeIcon}
                                     onPress={() => setShowPassword(!showPassword)}
                                 >
                                     <MaterialIcons
@@ -145,14 +146,14 @@ export function AuthScreen() {
                         </View>
 
                         <Pressable
-                            style={[styles.button, loading && styles.buttonDisabled]}
+                            style={[authStyles.button, loading && authStyles.buttonDisabled]}
                             onPress={handleAuth}
                             disabled={loading}
                         >
                             {loading ? (
                                 <ActivityIndicator color="#FFF" />
                             ) : (
-                                <Text style={styles.buttonText}>
+                                <Text style={authStyles.buttonText}>
                                     {isSignUp ? 'Registrarse' : 'Iniciar sesión'}
                                 </Text>
                             )}
@@ -172,10 +173,10 @@ export function AuthScreen() {
                         )}
 
                         <Pressable
-                            style={styles.switchBtn}
+                            style={authStyles.switchBtn}
                             onPress={() => setIsSignUp(!isSignUp)}
                         >
-                            <Text style={styles.switchText}>
+                            <Text style={authStyles.switchText}>
                                 {isSignUp
                                     ? '¿Ya tienes cuenta? Inicia sesión'
                                     : '¿No tienes cuenta? Regístrate'}
@@ -188,108 +189,3 @@ export function AuthScreen() {
     );
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.bg,
-    },
-    flex: {
-        flex: 1,
-    },
-    content: {
-        flex: 1,
-        padding: spacing.xl,
-        justifyContent: 'center',
-    },
-    header: {
-        alignItems: 'center',
-        marginBottom: 40,
-    },
-    logoContainer: {
-        width: 80,
-        height: 80,
-        borderRadius: 24,
-        backgroundColor: '#FFF',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 16,
-        elevation: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: '800',
-        color: colors.text,
-    },
-    subtitle: {
-        fontSize: 16,
-        color: colors.muted,
-        marginTop: 8,
-    },
-    form: {
-        gap: 20,
-    },
-    inputGroup: {
-        gap: 8,
-    },
-    label: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: colors.text,
-        marginLeft: 4,
-    },
-    input: {
-        height: 56,
-        backgroundColor: '#FFF',
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: radius.lg,
-        paddingHorizontal: 16,
-        fontSize: 15,
-        color: colors.text,
-    },
-    // ✅ NUEVO: Estilo para posicionar el ícono del ojo
-    eyeIcon: {
-        position: 'absolute',
-        right: 16,
-        top: 16,
-        height: 24,
-        width: 24,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    button: {
-        height: 56,
-        backgroundColor: colors.primary,
-        borderRadius: radius.lg,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 10,
-        elevation: 4,
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-    },
-    buttonDisabled: {
-        backgroundColor: '#cbd5e1',
-        shadowOpacity: 0,
-    },
-    buttonText: {
-        color: '#FFF',
-        fontSize: 16,
-        fontWeight: '700',
-    },
-    switchBtn: {
-        alignItems: 'center',
-        marginTop: 10,
-    },
-    switchText: {
-        color: colors.primary,
-        fontWeight: '600',
-        fontSize: 14,
-    },
-});

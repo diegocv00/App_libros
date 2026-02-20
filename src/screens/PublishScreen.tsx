@@ -20,6 +20,7 @@ import { supabase } from '../lib/supabase';
 import { colors, radius, spacing } from '../theme';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { formatInputPrice, cleanPrice } from '../utils/formatters';
+import { publishStyles as styles } from '../styles/publishStyles';
 
 const CONDITIONS = ['Nuevo', 'Como nuevo', 'Buen estado', 'Aceptable'];
 // ✅ Añadimos las categorías
@@ -34,9 +35,10 @@ const initialForm = {
   author: '',
   description: '',
   condition: 'Nuevo',
-  category: 'Todo', // ✅ Nuevo
-  stock: '1',       // ✅ Nuevo
+  category: 'Todo',
+  stock: '1',
   price: '',
+  location: '',     // ✅ Nuevo campo de ubicación
   photos: [] as string[],
   coverIndex: 0,
 };
@@ -61,9 +63,10 @@ export function PublishScreen() {
         author: draft.author || '',
         description: draft.description || '',
         condition: draft.condition || 'Nuevo',
-        category: draft.category || 'Todo', // ✅ Nuevo
-        stock: draft.stock ? String(draft.stock) : '1', // ✅ Nuevo
+        category: draft.category || 'Todo',
+        stock: draft.stock ? String(draft.stock) : '1',
         price: draft.price ? String(draft.price) : '',
+        location: draft.location || '', // ✅ Nuevo campo
         photos: Array.isArray(draft.photos) ? draft.photos : [],
         coverIndex: draft.cover_index || 0,
       });
@@ -162,7 +165,7 @@ export function PublishScreen() {
         publisher: null,
         edition: null,
         year: null,
-        location: null,
+        location: form.location.trim() || null, // ✅ Enviamos ubicación
       });
 
       if (draftId) {
@@ -192,9 +195,10 @@ export function PublishScreen() {
         author: form.author,
         description: form.description,
         condition: form.condition,
-        category: form.category,          // ✅ Guardar categoría en borrador
-        stock: parseInt(form.stock) || 1, // ✅ Guardar stock en borrador
+        category: form.category,
+        stock: parseInt(form.stock) || 1,
         price: form.price,
+        location: form.location, // ✅ Guardar ubicación en borrador
         photos: form.photos,
         cover_index: form.coverIndex,
       } as any);
@@ -306,6 +310,13 @@ export function PublishScreen() {
             </View>
           </View>
 
+          {/* ✅ UBICACIÓN */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Ubicación</Text>
+            <TextInput style={styles.input} placeholder="Ej: Ciudad, Barrio (Opcional)" placeholderTextColor="#94a3b8"
+              value={form.location} onChangeText={(v) => updateField('location', v)} />
+          </View>
+
           {/* ✅ PRECIO Y STOCK EN LA MISMA FILA */}
           <View style={{ flexDirection: 'row', gap: spacing.md }}>
             <View style={[styles.inputGroup, { flex: 1.2 }]}>
@@ -388,110 +399,3 @@ export function PublishScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
-    borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: '#fff',
-  },
-  headerIcon: { width: 40, alignItems: 'flex-start' },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
-  draftText: { fontSize: 14, fontWeight: '700', color: colors.primary, width: 60, textAlign: 'right' },
-  container: { paddingBottom: 120 },
-  photoContainer: { padding: spacing.lg },
-  photoRow: { flexDirection: 'row', gap: spacing.md, paddingVertical: 12 },
-  addPhotoBtn: {
-    width: 140, aspectRatio: 1, borderRadius: radius.lg,
-    backgroundColor: colors.primary + '08',
-    borderWidth: 2, borderStyle: 'dashed', borderColor: colors.primary + '40',
-    alignItems: 'center', justifyContent: 'center', gap: 4,
-  },
-  addPhotoText: { fontSize: 10, fontWeight: '700', color: colors.primary },
-  photoThumb: { width: 140, aspectRatio: 1, borderRadius: radius.lg, position: 'relative', overflow: 'hidden' },
-  thumbImage: { width: '100%', height: '100%' },
-  deletePhoto: {
-    position: 'absolute', top: 8, right: 8,
-    width: 24, height: 24, borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center',
-  },
-  photoPlaceholder: {
-    width: 140, aspectRatio: 1, borderRadius: radius.lg,
-    backgroundColor: '#fff', borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border,
-    alignItems: 'center', justifyContent: 'center', gap: 4,
-  },
-  photoPlaceholderText: { fontSize: 10, color: colors.muted, fontWeight: '600' },
-  coverBadge: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)', paddingVertical: 4, alignItems: 'center',
-  },
-  coverBadgeActive: { backgroundColor: colors.primary },
-  coverBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
-  form: { paddingHorizontal: spacing.lg, gap: spacing.xl },
-  inputGroup: { gap: 8 },
-  label: { fontSize: 14, fontWeight: '700', color: colors.text, marginLeft: 4 },
-  input: {
-    height: 56, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.border,
-    borderRadius: radius.lg, paddingHorizontal: 16, fontSize: 15, color: colors.text,
-  },
-  priceInputRow: { position: 'relative' },
-  priceSymbol: { position: 'absolute', left: 16, top: 15, fontSize: 18, fontWeight: '700', color: colors.muted, zIndex: 1 },
-  priceInput: { paddingLeft: 32, fontWeight: '700', fontSize: 18 },
-  textArea: { height: 100, paddingTop: 16, textAlignVertical: 'top' },
-  conditionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  conditionBtn: {
-    flex: 1, minWidth: '45%', height: 48, borderRadius: radius.lg,
-    borderWidth: 1, borderColor: colors.border, backgroundColor: '#fff',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  conditionBtnActive: { borderColor: colors.primary, backgroundColor: colors.primary + '08', borderWidth: 2 },
-  conditionText: { fontSize: 13, fontWeight: '600', color: colors.muted },
-  conditionTextActive: { color: colors.primary, fontWeight: '700' },
-  hint: { fontSize: 11, color: colors.muted, marginLeft: 4 },
-  statusText: { padding: spacing.lg, textAlign: 'center', color: colors.primary, fontWeight: '600' },
-  footer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    padding: spacing.lg, paddingBottom: 40,
-    backgroundColor: colors.bg, borderTopWidth: 1, borderTopColor: colors.border,
-  },
-  publishBtn: {
-    height: 56, backgroundColor: colors.primary, borderRadius: radius.lg,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12,
-    shadowColor: colors.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
-  },
-  publishBtnText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
-  btnDisabled: { backgroundColor: '#cbd5e1', shadowOpacity: 0, elevation: 0 },
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center', justifyContent: 'center', padding: spacing.xl,
-  },
-  modalCard: {
-    backgroundColor: '#fff', borderRadius: 24, padding: spacing.xl,
-    width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.15, shadowRadius: 30, elevation: 20,
-  },
-  modalIconRow: { alignItems: 'center', marginBottom: spacing.md },
-  modalIconBg: {
-    width: 60, height: 60, borderRadius: 30,
-    backgroundColor: colors.primary + '15', alignItems: 'center', justifyContent: 'center',
-  },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: colors.text, textAlign: 'center', marginBottom: 6 },
-  modalSubtitle: { fontSize: 13, color: colors.muted, textAlign: 'center', marginBottom: spacing.lg, lineHeight: 20 },
-  modalInput: {
-    height: 52, backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: colors.border,
-    borderRadius: radius.lg, paddingHorizontal: 16, fontSize: 15, color: colors.text, marginBottom: spacing.lg,
-  },
-  modalActions: { flexDirection: 'row', gap: 12 },
-  modalCancelBtn: {
-    flex: 1, height: 48, borderRadius: radius.lg, borderWidth: 1.5, borderColor: colors.border,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  modalCancelText: { fontSize: 14, fontWeight: '700', color: colors.muted },
-  modalConfirmBtn: {
-    flex: 1, height: 48, borderRadius: radius.lg, backgroundColor: colors.primary,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
-  },
-  modalConfirmText: { fontSize: 14, fontWeight: '800', color: '#fff' },
-});

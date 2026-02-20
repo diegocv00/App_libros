@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, Pressable, FlatList, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Modal, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { createPost, fetchPostsByCommunity, deleteCommunity, deletePost, fetchCommunityById, addCommunityAdmin, removeCommunityAdmin, fetchCommunityMembers } from '../services/communities';
 import { supabase } from '../lib/supabase';
 import { CommunityPost, Community } from '../types';
 import { colors, radius, spacing } from '../theme';
+import { chatStyles } from '../styles/chatStyles';
+import { communityWallStyles as styles } from '../styles/communityWallStyles';
 
 export function CommunityWallScreen({ route, navigation }: any) {
+    const insets = useSafeAreaInsets();
+
     const [community, setCommunity] = useState<Community>(route.params.community);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [posts, setPosts] = useState<CommunityPost[]>([]);
@@ -17,7 +21,6 @@ export function CommunityWallScreen({ route, navigation }: any) {
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
 
-    // Estados para gestión de Admins
     const [showAdminModal, setShowAdminModal] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -25,7 +28,6 @@ export function CommunityWallScreen({ route, navigation }: any) {
         supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id || null));
     }, []);
 
-    // 1. LÓGICA DE TIEMPO REAL CORREGIDA
     useEffect(() => {
         const channel = supabase
             .channel(`community_${community.id}`)
@@ -40,8 +42,6 @@ export function CommunityWallScreen({ route, navigation }: any) {
                 async (payload) => {
                     const newPost = payload.new as CommunityPost;
 
-                    // Como el payload de tiempo real no trae el "join" de perfiles, 
-                    // buscamos el nombre rápidamente para inyectarlo en la lista.
                     const { data: profile } = await supabase
                         .from('profiles')
                         .select('full_name')
@@ -54,7 +54,6 @@ export function CommunityWallScreen({ route, navigation }: any) {
                     };
 
                     setPosts((current) => {
-                        // Evitamos duplicados si el fetch y el insert coinciden
                         if (current.find(p => p.id === newPost.id)) return current;
                         return [postWithProfile, ...current];
                     });
@@ -106,9 +105,8 @@ export function CommunityWallScreen({ route, navigation }: any) {
         });
     }, [navigation, currentUserId, community, isAdmin]);
 
-    // 2. CORRECCIÓN ERROR TYPESCRIPT EN ALERT
     const showCommunityMenu = () => {
-        const options: any[] = [ // Cast a any[] para evitar error de propiedades conocidas
+        const options: any[] = [
             { text: 'Editar Comunidad', onPress: () => navigation.navigate('EditCommunity', { community }) }
         ];
 
@@ -201,7 +199,6 @@ export function CommunityWallScreen({ route, navigation }: any) {
         if (!text.trim()) return;
         setSending(true);
         try {
-            // No necesitamos recargar posts aquí porque el Realtime lo hará automáticamente
             await createPost({ community_id: community.id, content: text.trim(), image_url: null });
             setText('');
         } catch (err) {
@@ -217,45 +214,8 @@ export function CommunityWallScreen({ route, navigation }: any) {
     );
 
     return (
-        <SafeAreaView style={styles.container} edges={['bottom']}>
-            <FlatList
-                data={posts}
-                inverted
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.listContent}
-                ListEmptyComponent={loading ? <ActivityIndicator color={colors.primary} /> : <Text style={styles.emptyText}>Sé el primero en publicar.</Text>}
-                renderItem={({ item }) => {
-                    const isMsgAdmin = (community.admin_ids || []).includes(item.user_id) || item.user_id === community.creator_id;
-
-                    return (
-                        <Pressable
-                            onLongPress={() => handlePostLongPress(item)}
-                            delayLongPress={500}
-                            style={styles.postCard}
-                        >
-                            <View style={styles.postHeader}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                    <MaterialIcons
-                                        name="person"
-                                        size={20}
-                                        color={isMsgAdmin ? colors.primary : colors.muted}
-                                    />
-                                    <View>
-                                        <Text style={styles.authorName}>
-                                            {item.profiles?.full_name || 'Usuario'}
-                                            {item.user_id === community.creator_id ? ' (Creador)' : (community.admin_ids || []).includes(item.user_id) ? ' (Admin)' : ''}
-                                        </Text>
-                                        <Text style={styles.postDate}>
-                                            {new Date(item.created_at).toLocaleDateString()}
-                                        </Text>
-                                    </View>
-                                </View>
-                            </View>
-                            <Text style={styles.postContent}>{item.content}</Text>
-                        </Pressable>
-                    );
-                }}
-            />
+        // Solo edges top: el bottom lo manejamos nosotros con keyboardHeight + insets
+        <SafeAreaView style={styles.container} edges={['top']}>
 
             <Modal visible={showAdminModal} animationType="slide" transparent>
                 <View style={styles.modalOverlay}>
@@ -286,7 +246,9 @@ export function CommunityWallScreen({ route, navigation }: any) {
                                             <Text style={styles.adminCandidateText}>
                                                 {member.profiles?.full_name || 'Usuario desconocido'}
                                             </Text>
-                                            {isMemberCreator && <Text style={{ fontSize: 12, color: colors.primary }}>Creador</Text>}
+                                            {isMemberCreator && (
+                                                <Text style={{ fontSize: 12, color: colors.primary }}>Creador</Text>
+                                            )}
                                         </View>
 
                                         {!isMemberCreator && (
@@ -311,101 +273,81 @@ export function CommunityWallScreen({ route, navigation }: any) {
                 </View>
             </Modal>
 
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                <View style={styles.inputContainer}>
+            <KeyboardAvoidingView
+                style={styles.inner}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={90}
+            >
+                <FlatList
+                    data={posts}
+                    inverted
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.listContent}
+                    ListEmptyComponent={
+                        loading
+                            ? <ActivityIndicator color={colors.primary} />
+                            : <Text style={styles.emptyText}>Sé el primero en publicar.</Text>
+                    }
+                    renderItem={({ item }) => {
+                        const isMsgAdmin = (community.admin_ids || []).includes(item.user_id) || item.user_id === community.creator_id;
+
+                        return (
+                            <Pressable
+                                onLongPress={() => handlePostLongPress(item)}
+                                delayLongPress={500}
+                                style={styles.postCard}
+                            >
+                                <View style={styles.postHeader}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <MaterialIcons
+                                            name="person"
+                                            size={20}
+                                            color={isMsgAdmin ? colors.primary : colors.muted}
+                                        />
+                                        <View>
+                                            <Text style={styles.authorName}>
+                                                {item.profiles?.full_name || 'Usuario'}
+                                                {item.user_id === community.creator_id
+                                                    ? ' (Creador)'
+                                                    : (community.admin_ids || []).includes(item.user_id)
+                                                        ? ' (Admin)'
+                                                        : ''}
+                                            </Text>
+                                            <Text style={styles.postDate}>
+                                                {new Date(item.created_at).toLocaleDateString()}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </View>
+                                <Text style={styles.postContent}>{item.content}</Text>
+                            </Pressable>
+                        );
+                    }}
+                />
+
+                <View style={chatStyles.inputArea}>
                     <TextInput
-                        style={styles.input}
+                        style={chatStyles.input}
                         placeholder="Escribe algo a la comunidad..."
+                        placeholderTextColor={colors.muted}
                         value={text}
                         onChangeText={setText}
                         multiline
                     />
-                    <Pressable style={styles.sendButton} onPress={handleSend} disabled={sending || !text.trim()}>
-                        {sending ? <ActivityIndicator color="#fff" size="small" /> : <MaterialIcons name="send" size={20} color="#fff" />}
+                    <Pressable
+                        style={[chatStyles.sendBtn, (!text.trim() || sending) && { opacity: 0.5 }]}
+                        onPress={handleSend}
+                        disabled={sending || !text.trim()}
+                    >
+                        {sending
+                            ? <ActivityIndicator color="#fff" size="small" />
+                            : <MaterialIcons name="send" size={24} color="#ffffff" />
+                        }
                     </Pressable>
                 </View>
             </KeyboardAvoidingView>
+
         </SafeAreaView>
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.bg },
-    listContent: { padding: spacing.md, flexGrow: 1, justifyContent: 'flex-end' },
-    postCard: {
-        backgroundColor: '#fff',
-        padding: spacing.md,
-        borderRadius: radius.md,
-        marginBottom: spacing.sm,
-        borderWidth: 1,
-        borderColor: colors.border
-    },
-    postHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
-    authorName: { fontSize: 14, fontWeight: 'bold', color: colors.text },
-    postDate: { fontSize: 11, color: colors.muted },
-    postContent: { fontSize: 15, color: colors.text, lineHeight: 20 },
-    emptyText: { textAlign: 'center', color: colors.muted, marginTop: 40 },
-    inputContainer: {
-        flexDirection: 'row',
-        padding: spacing.sm,
-        backgroundColor: '#fff',
-        borderTopWidth: 1,
-        borderColor: colors.border,
-        alignItems: 'center'
-    },
-    input: {
-        flex: 1,
-        backgroundColor: '#f1f5f9',
-        borderRadius: 20,
-        paddingHorizontal: 16,
-        paddingTop: 10,
-        paddingBottom: 10,
-        minHeight: 40,
-        maxHeight: 100
-    },
-    sendButton: {
-        backgroundColor: colors.primary,
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginLeft: spacing.sm
-    },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalContent: {
-        backgroundColor: '#fff',
-        padding: 20,
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        minHeight: '70%'
-    },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    modalTitle: { fontSize: 20, fontWeight: 'bold', color: colors.text },
-    sectionLabel: { fontSize: 12, fontWeight: 'bold', color: colors.muted, marginBottom: 15, textTransform: 'uppercase' },
-    searchBar: {
-        backgroundColor: '#f1f5f9',
-        padding: 12,
-        borderRadius: radius.md,
-        marginBottom: 15
-    },
-    adminCandidateRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderColor: colors.border
-    },
-    adminCandidateText: { fontSize: 16, color: colors.text, fontWeight: '500' },
-    actionBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-    addBtn: { backgroundColor: colors.primary + '20' },
-    removeBtn: { backgroundColor: '#fee2e2' },
-    actionBtnText: { fontSize: 12, fontWeight: 'bold', color: colors.primary },
-    closeModalBtn: {
-        backgroundColor: colors.primary,
-        padding: 16,
-        borderRadius: radius.md,
-        alignItems: 'center',
-        marginTop: 20
-    }
-});

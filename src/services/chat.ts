@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { Conversation, Message, ReportInput } from '../types';
+import { DeviceEventEmitter } from 'react-native';
 
 // 1. OBTENER O CREAR UNA CONVERSACIÓN
 // Se asegura de traer los perfiles del comprador y vendedor para mostrar los nombres
@@ -87,12 +88,18 @@ export async function markAsRead(conversationId: string): Promise<void> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    await supabase
+    const { data, error } = await supabase
         .from('messages')
         .update({ is_read: true })
         .eq('conversation_id', conversationId)
-        .neq('sender_id', user.id)
-        .eq('is_read', false);
+        .neq('sender_id', user.id) // SOLO marca como leídos los que NO enviaste tú
+        .eq('is_read', false)
+        .select();
+
+    // Emitir evento para actualizar la campana de notificaciones enseguida
+    if (!error) {
+        DeviceEventEmitter.emit('updateUnreadCount');
+    }
 }
 
 // 5. SISTEMA DE REPORTES (Mensajes o Usuarios)
@@ -114,12 +121,15 @@ export async function reportContent(input: ReportInput): Promise<void> {
     if (error) throw error;
 }
 
-// 6. OBTENER LISTA DE CHATS DEL USUARIO (Para una bandeja de entrada)
-export async function fetchUserConversations(): Promise<Conversation[]> {
+// ... (resto de importaciones)
+
+// 6. OBTENER LISTA DE CHATS DEL USUARIO CON CONTEO DE NO LEÍDOS
+export async function fetchUserConversations(): Promise<(Conversation & { unread_count: number })[]> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
 
-    const { data, error } = await supabase
+    // Traemos las conversaciones
+    const { data: convs, error } = await supabase
         .from('conversations')
         .select(`
           *,
@@ -130,11 +140,21 @@ export async function fetchUserConversations(): Promise<Conversation[]> {
         .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
         .order('created_at', { ascending: false });
 
-    if (error) {
-        console.error("Error al traer conversaciones:", error);
-        throw error;
-    }
-    return data as Conversation[];
+    if (error) throw error;
+
+    // Para cada conversación, contamos los mensajes no leídos que NO envió el usuario actual
+    const conversationsWithCount = await Promise.all(convs.map(async (conv) => {
+        const { count } = await supabase
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('conversation_id', conv.id)
+            .eq('is_read', false)
+            .neq('sender_id', user.id);
+
+        return { ...conv, unread_count: count || 0 };
+    }));
+
+    return conversationsWithCount as (Conversation & { unread_count: number })[];
 }
 
 // 7. NUEVA FUNCIÓN: Obtener conteo de mensajes no leídos globalmente
@@ -161,3 +181,4 @@ export async function deleteConversation(conversationId: string): Promise<void> 
 
     if (error) throw error;
 }
+

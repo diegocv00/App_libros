@@ -100,6 +100,7 @@ export type Draft = {
   updated_at: string;
   category?: string;
   stock?: number;
+  location?: string;
 };
 
 export type Favorite = {
